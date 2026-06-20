@@ -4,9 +4,15 @@
   "type": "module",
   "packageManager": "pnpm@11.5.2",
   "scripts": {
-    "dev": "pnpm -r --parallel --if-present dev",
+    "dev": "pnpm exec alchemy dev alchemy.run.ts --stage dev_$USER",
+    "dev:workspace": "pnpm -r --parallel --if-present dev",
     "build": "pnpm -r --if-present build",
-    "check": "pnpm -r --if-present check",
+    "check": "tsc --noEmit && pnpm -r --if-present check",
+    "alchemy:dev": "pnpm exec alchemy dev alchemy.run.ts --stage dev_$USER",
+    "alchemy:plan": "pnpm exec alchemy plan alchemy.run.ts",
+    "alchemy:deploy": "pnpm exec alchemy deploy alchemy.run.ts",
+    "alchemy:deploy:prod": "pnpm exec alchemy deploy alchemy.run.ts --stage prod",
+    "alchemy:destroy": "pnpm exec alchemy destroy alchemy.run.ts",
     "opensrc:effect": "./scripts/ensure-effect-source.sh",
     "postinstall": "./scripts/ensure-effect-source.sh",
     "test": "pnpm -r --if-present test"
@@ -15,6 +21,10 @@
     "effect": "4.0.0-beta.85"
   },
   "devDependencies": {
-    "opensrc": "^0.7.2"
+    "@cloudflare/workers-types": "^4.20260619.1",
+    "@effect/platform-node": "4.0.0-beta.85",
+    "alchemy": "2.0.0-beta.57",
+    "opensrc": "^0.7.2",
+    "typescript": "^6.0.3"
   }
 }

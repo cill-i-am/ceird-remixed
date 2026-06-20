@@ -41,6 +41,19 @@ Use the standards as repo-wide guidance for:
 
 Prefer established local code patterns first. Apply the standards to new or touched code without forcing broad migrations unless the user explicitly requests one.
 
+## Deployment Model
+
+Use trunk-based deployment. Do not introduce separate long-lived staging and production application instances unless the user explicitly asks for that topology.
+
+- Treat `main` as the deployable trunk.
+- Use feature flags to ship incomplete, experimental, risky, or user-specific behavior safely.
+- Keep feature flags explicit, typed where practical, and default-off for unfinished behavior.
+- Prefer small, continuously integrated changes over long-lived branches or environment promotion workflows.
+- Use local/developer Alchemy stages such as `dev_$USER` only for development, testing, and Cloudflare-backed local iteration.
+- Do not create a persistent `staging` stage, PR preview environment, or parallel production-like stack by default.
+- If a temporary preview stage is explicitly requested, make it short-lived, cleanup-safe, and not part of the release path.
+- CI should run checks for branches and deploy from trunk only after the required checks pass.
+
 ## Effect Guidance
 
 This repo uses Effect. For Effect-specific work, use the repo-local `effect-ts` skill in `.agents/skills/effect-ts`.

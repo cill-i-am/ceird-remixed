@@ -1,5 +1,9 @@
 {
   "name": "@ceird/api",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "alchemy": "2.0.0-beta.57",
+    "effect": "4.0.0-beta.85"
+  }
 }
