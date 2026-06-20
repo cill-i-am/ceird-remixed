@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.turbo/
+.vite/
+
+.env
+.env.*
+!.env.example
+
+.alchemy/
+.wrangler/
+
+.DS_Store

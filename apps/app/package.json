@@ -1,0 +1,5 @@
+{
+  "name": "@ceird/app",
+  "private": true,
+  "type": "module"
+}

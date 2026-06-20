@@ -1,0 +1,5 @@
+{
+  "name": "@ceird/api",
+  "private": true,
+  "type": "module"
+}
