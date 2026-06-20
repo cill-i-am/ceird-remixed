@@ -18,6 +18,18 @@ export default Alchemy.Stack(
   },
   Effect.gen(function* () {
     const api = yield* ApiWorker;
+    const apiUrl = api.url.as<string>();
+    const app = yield* Cloudflare.Vite("App", {
+      rootDir: "apps/app",
+      url: true,
+      compatibility: {
+        flags: ["nodejs_compat"],
+      },
+      env: {
+        VITE_API_URL: apiUrl,
+      },
+    });
+    const appUrl = app.url.as<string>();
     const pullRequest = yield* Config.string("PULL_REQUEST").pipe(
       Config.withDefault(""),
     );
@@ -37,14 +49,16 @@ export default Alchemy.Stack(
         body: Output.interpolate`
           ## Preview deployed
 
-          URL: ${api.url}
+          App: ${appUrl}
+          API: ${apiUrl}
           Commit: ${commitSha}
         `,
       });
     }
 
     return {
-      apiUrl: api.url,
+      apiUrl,
+      appUrl,
     };
   }),
 );

@@ -41,6 +41,19 @@ Use the standards as repo-wide guidance for:
 
 Prefer established local code patterns first. Apply the standards to new or touched code without forcing broad migrations unless the user explicitly requests one.
 
+## Boundary Type Safety
+
+When values cross a boundary, parse them immediately and carry the parsed domain type inward.
+
+- Treat environment variables, Vite `import.meta.env`, request payloads, URL params, headers, cookies, database rows, queue messages, webhook payloads, and Alchemy-provided runtime values as boundary input.
+- Do not pass raw strings, numbers, booleans, or loosely typed DTOs deeper into the app when the value has domain meaning.
+- Prefer Effect Schema for boundary parsing in this repo. Use schema transformations for representation changes, such as string-to-`URL`.
+- Use branded or opaque types for meaningful primitives such as URLs, IDs, slugs, stages, flags, currency, durations, and resource names.
+- Brand values after the parser proves the invariant. Do not use casts, assertions, or ambient TypeScript declarations to "earn" a brand.
+- Missing or invalid required config is startup misconfiguration. Fail fast at the app or Worker boundary instead of rendering fallback UI or inventing defaults.
+- Keep parsed config in a small boundary module or Effect Layer. Application code should consume typed values such as `ApiBaseUrl`, not `string | undefined`.
+- If a value is sensitive, keep it redacted at the boundary and unwrap it only inside the adapter that needs the raw secret.
+
 ## Deployment Model
 
 Use trunk-based deployment. Do not introduce a separate long-lived staging environment that gates production unless the user explicitly asks for that topology.

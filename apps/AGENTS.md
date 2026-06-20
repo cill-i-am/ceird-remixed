@@ -28,3 +28,13 @@ These instructions apply to `apps/*` and refine the repository root `AGENTS.md`.
 - Keep TanStack Start routing, loaders, server functions, and app-shell concerns inside the web app package.
 - Put reusable UI primitives, domain models, API contracts, and shared client helpers in `packages/*` when they need to cross app boundaries.
 - Do not introduce another rich-app framework such as Next, Remix, or SvelteKit unless the user explicitly asks for it or the repo records a deliberate framework change.
+
+## Public Config And Alchemy Inputs
+
+- Prefer Alchemy stack wiring for app-to-app resource values. For example, a root stack may pass an API Worker URL into `Cloudflare.Vite` through `env: { VITE_API_URL: api.url.as<string>() }`.
+- Treat Vite `VITE_*` values as public build/runtime inputs, not as trusted domain values.
+- Define required `VITE_*` keys in `vite-env.d.ts` for editor and compile-time feedback, but do not rely on type declarations for runtime safety.
+- Parse required public config once at the app boundary with Effect Schema, then export parsed/branded values from a precise config module.
+- Use `Schema.URLFromString` for URL-shaped env values, then brand the decoded `URL` by role, such as `ApiBaseUrl`, `AppBaseUrl`, or `AssetBaseUrl`.
+- Do not render fallback states for missing required config. Missing Alchemy-provided public config should fail the app early so broken stack wiring is obvious.
+- Routes, loaders, server functions, and UI components should consume parsed config values, not read `import.meta.env` directly.
