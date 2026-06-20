@@ -43,16 +43,18 @@ Prefer established local code patterns first. Apply the standards to new or touc
 
 ## Deployment Model
 
-Use trunk-based deployment. Do not introduce separate long-lived staging and production application instances unless the user explicitly asks for that topology.
+Use trunk-based deployment. Do not introduce a separate long-lived staging environment that gates production unless the user explicitly asks for that topology.
 
 - Treat `main` as the deployable trunk.
+- Deploy `main` to the `prod` Alchemy stage through CI after checks pass.
+- Create one short-lived Alchemy stage per pull request, named `pr-<number>`, and destroy it when the PR closes.
 - Use feature flags to ship incomplete, experimental, risky, or user-specific behavior safely.
 - Keep feature flags explicit, typed where practical, and default-off for unfinished behavior.
 - Prefer small, continuously integrated changes over long-lived branches or environment promotion workflows.
 - Use local/developer Alchemy stages such as `dev_$USER` only for development, testing, and Cloudflare-backed local iteration.
-- Do not create a persistent `staging` stage, PR preview environment, or parallel production-like stack by default.
-- If a temporary preview stage is explicitly requested, make it short-lived, cleanup-safe, and not part of the release path.
-- CI should run checks for branches and deploy from trunk only after the required checks pass.
+- Do not create a persistent `staging` stage or parallel production-like stack by default.
+- PR stages are preview environments, not release gates. They should be cleanup-safe and should not become part of the production release path.
+- CI should run checks for branches, deploy PR stages for same-repository pull requests, clean up closed PR stages, and deploy from trunk only after the required checks pass.
 
 ## Effect Guidance
 

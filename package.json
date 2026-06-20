@@ -10,6 +10,8 @@
     "check": "tsc --noEmit && pnpm -r --if-present check",
     "alchemy:dev": "pnpm exec alchemy dev alchemy.run.ts --stage dev_$USER",
     "alchemy:plan": "pnpm exec alchemy plan alchemy.run.ts",
+    "alchemy:plan:ci": "pnpm exec alchemy plan stacks/github.ts --stage prod --profile ${ALCHEMY_BOOTSTRAP_PROFILE:-ceird-admin-global}",
+    "alchemy:bootstrap-ci": "pnpm exec alchemy deploy stacks/github.ts --stage prod --profile ${ALCHEMY_BOOTSTRAP_PROFILE:-ceird-admin-global}",
     "alchemy:deploy": "pnpm exec alchemy deploy alchemy.run.ts",
     "alchemy:deploy:prod": "pnpm exec alchemy deploy alchemy.run.ts --stage prod",
     "alchemy:destroy": "pnpm exec alchemy destroy alchemy.run.ts",
