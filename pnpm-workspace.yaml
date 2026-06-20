@@ -1,3 +1,8 @@
 packages:
   - "apps/*"
   - "packages/*"
+allowBuilds:
+  msgpackr-extract: false
+  opensrc: true
+minimumReleaseAgeExclude:
+  - effect@4.0.0-beta.85

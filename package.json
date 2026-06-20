@@ -7,6 +7,14 @@
     "dev": "pnpm -r --parallel --if-present dev",
     "build": "pnpm -r --if-present build",
     "check": "pnpm -r --if-present check",
+    "opensrc:effect": "./scripts/ensure-effect-source.sh",
+    "postinstall": "./scripts/ensure-effect-source.sh",
     "test": "pnpm -r --if-present test"
+  },
+  "dependencies": {
+    "effect": "4.0.0-beta.85"
+  },
+  "devDependencies": {
+    "opensrc": "^0.7.2"
   }
 }
