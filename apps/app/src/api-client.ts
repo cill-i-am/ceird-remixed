@@ -19,6 +19,10 @@ class ApiClient extends Context.Service<
 /** API health state rendered by the web app. */
 export type ApiHealthStatus =
   | {
+      readonly _tag: "Checking";
+      readonly message: string;
+    }
+  | {
       readonly _tag: "Healthy";
       readonly service: HealthResponse["service"];
       readonly status: HealthResponse["status"];
@@ -27,6 +31,11 @@ export type ApiHealthStatus =
       readonly _tag: "Unhealthy";
       readonly message: string;
     };
+
+export const checkingApiHealthStatus: ApiHealthStatus = {
+  _tag: "Checking",
+  message: "API health check pending.",
+};
 
 const unhealthyApiHealthStatus: ApiHealthStatus = {
   _tag: "Unhealthy",
@@ -120,13 +129,20 @@ const loadApiHealthStatus = Effect.fn("loadApiHealthStatus")(() =>
 
 /** TanStack Query options for API health backed by the shared Effect HttpApi contract. */
 export function apiHealthQueryOptions(
-  options: Readonly<{ apiBaseUrl: ApiBaseUrl; fetch?: typeof fetch }>,
+  options: Readonly<{
+    apiBaseUrl: ApiBaseUrl;
+    enabled?: boolean;
+    fetch?: typeof fetch;
+  }>,
 ) {
   const effectQuery = createEffectQuery(
     makeApiClientLive(options.apiBaseUrl, options.fetch),
   );
+  const enabledOption =
+    options.enabled === undefined ? {} : { enabled: options.enabled };
 
   return effectQuery.queryOptions({
+    ...enabledOption,
     queryKey: ["api", "health", options.apiBaseUrl.href] as const,
     refetchInterval: apiHealthRefetchInterval,
     queryFn: () =>

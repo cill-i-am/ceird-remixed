@@ -1,27 +1,25 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { apiHealthQueryOptions } from "../api-client";
+import { createFileRoute, useHydrated } from "@tanstack/react-router";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  apiHealthQueryOptions,
+  checkingApiHealthStatus,
+} from "../api-client";
 import { HealthBadge } from "../health-badge";
 import { parsePublicConfig, publicConfigQueryOptions } from "../public-config";
 
 export const Route = createFileRoute("/")({
   loader: async ({ context }) => {
-    const { apiBaseUrl } = parsePublicConfig(
-      await context.queryClient.ensureQueryData(publicConfigQueryOptions),
-    );
-
-    await context.queryClient.ensureQueryData(
-      apiHealthQueryOptions({ apiBaseUrl }),
-    );
+    await context.queryClient.ensureQueryData(publicConfigQueryOptions);
   },
   component: Home,
 });
 
 function Home() {
+  const hydrated = useHydrated();
   const { data: publicConfig } = useSuspenseQuery(publicConfigQueryOptions);
   const { apiBaseUrl } = parsePublicConfig(publicConfig);
-  const { data: apiHealth } = useSuspenseQuery(
-    apiHealthQueryOptions({ apiBaseUrl }),
+  const { data: apiHealth = checkingApiHealthStatus } = useQuery(
+    apiHealthQueryOptions({ apiBaseUrl, enabled: hydrated }),
   );
 
   return (

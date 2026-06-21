@@ -87,6 +87,11 @@ h1 {
   color: #8d2020;
 }
 
+.health-badge.checking {
+  border-color: #6d7480;
+  color: #4b5563;
+}
+
 .health-dot {
   width: 10px;
   height: 10px;
