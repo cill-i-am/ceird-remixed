@@ -36,10 +36,11 @@ These instructions apply to `apps/*` and refine the repository root `AGENTS.md`.
 
 ## Public Config And Alchemy Inputs
 
-- Prefer Alchemy stack wiring for app-to-app resource values. For example, a root stack may pass an API Worker URL into `Cloudflare.Vite` through `env: { VITE_API_URL: api.url.as<string>() }`.
-- Treat Vite `VITE_*` values as public build/runtime inputs, not as trusted domain values.
-- Define required `VITE_*` keys in `vite-env.d.ts` for editor and compile-time feedback, but do not rely on type declarations for runtime safety.
-- Parse required public config once at the app boundary with Effect Schema, then export parsed/branded values from a precise config module.
-- Use `Schema.URLFromString` for URL-shaped env values, then brand the decoded `URL` by role, such as `ApiBaseUrl`, `AppBaseUrl`, or `AssetBaseUrl`.
-- Do not render fallback states for missing required config. Missing Alchemy-provided public config should fail the app early so broken stack wiring is obvious.
-- Routes, loaders, server functions, and UI components should consume parsed config values, not read `import.meta.env` directly.
+- Prefer Alchemy stack wiring for app-to-app resource values. For example, a root stack may pass an API Worker URL into `Cloudflare.Vite` through a server-side env binding such as `env: { API_URL: api.url.as<string>() }`.
+- Do not bake mutable stack-derived values into browser bundles with `VITE_*` when the app may need to swap them without a rebuild. Read those values on the TanStack Start server side and expose only the allowed public subset to the browser.
+- Model server config with one Effect Schema source of truth. Derive client-visible config from that schema with an explicit allowlist, for example `ServerConfigSchema.mapFields(({ apiBaseUrl }) => ({ apiBaseUrl }))`; do not duplicate parallel server/public schemas by hand.
+- Treat public config as a boundary crossing. Decode and brand values with Effect Schema before use, and use role-specific branded types for URL-shaped values such as `ApiBaseUrl`, `AppBaseUrl`, or `AssetBaseUrl`.
+- Keep the public config wire shape plain and serializable for TanStack Start and TanStack Query hydration. Brand and parse at the boundary; do not pass rich runtime objects such as resources, clients, schema classes, or errors through router serialization.
+- Missing or invalid required config should fail the server function/loader and crash loudly. Do not render fallback states for required stack wiring.
+- Cache runtime public config deliberately. The app server may cache config in memory with a short TTL, and the browser should mirror that policy with TanStack Query `staleTime`/`refetchInterval` when config can change out of band.
+- Routes, loaders, server functions, and UI components should consume parsed config values from the config module, not read `process.env` or `import.meta.env` directly.

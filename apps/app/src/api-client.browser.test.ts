@@ -1,6 +1,10 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "vitest";
-import { apiHealthQueryOptions, makeApiHealthQueryOptions } from "./api-client";
+import {
+  apiHealthRefetchInterval,
+  apiHealthQueryOptions,
+} from "./api-client";
+import { parseApiBaseUrl } from "./public-config-schema";
 
 type FetchCall = {
   readonly headers: Readonly<Record<string, string>>;
@@ -13,10 +17,15 @@ const healthyResponseBody = {
   service: "ceird-api",
   status: "healthy",
 };
+const testApiBaseUrl = parseApiBaseUrl("http://api.test");
 
 describe("apiHealthQueryOptions", () => {
   test("polls API health every thirty seconds", () => {
-    expect(apiHealthQueryOptions.refetchInterval).toBe(30_000);
+    expect(
+      apiHealthQueryOptions({
+        apiBaseUrl: testApiBaseUrl,
+      }).refetchInterval,
+    ).toBe(apiHealthRefetchInterval);
   });
 
   test("retries transient GET responses before returning a healthy result", async () => {
@@ -26,7 +35,10 @@ describe("apiHealthQueryOptions", () => {
         : jsonResponse(healthyResponseBody),
     );
     const queryClient = makeQueryClient();
-    const queryOptions = makeApiHealthQueryOptions({ fetch });
+    const queryOptions = apiHealthQueryOptions({
+      apiBaseUrl: testApiBaseUrl,
+      fetch,
+    });
 
     const health = await queryClient.ensureQueryData(queryOptions);
 
@@ -51,7 +63,10 @@ describe("apiHealthQueryOptions", () => {
       throw new TypeError("Network unavailable");
     });
     const queryClient = makeQueryClient();
-    const queryOptions = makeApiHealthQueryOptions({ fetch });
+    const queryOptions = apiHealthQueryOptions({
+      apiBaseUrl: testApiBaseUrl,
+      fetch,
+    });
 
     const health = await queryClient.ensureQueryData(queryOptions);
 

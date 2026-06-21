@@ -26,7 +26,7 @@ export default Alchemy.Stack(
         flags: ["nodejs_compat"],
       },
       env: {
-        VITE_API_URL: apiUrl,
+        API_URL: apiUrl,
       },
     });
     const appUrl = app.url.as<string>();

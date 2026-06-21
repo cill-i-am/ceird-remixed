@@ -9,7 +9,7 @@ import type * as HttpClientResponse from "effect/unstable/http/HttpClientRespons
 import * as HttpApiClient from "effect/unstable/httpapi/HttpApiClient";
 import * as Schedule from "effect/Schedule";
 import { createEffectQuery } from "effect-query";
-import { apiBaseUrl } from "./public-config";
+import type { ApiBaseUrl } from "./public-config-schema";
 
 class ApiClient extends Context.Service<
   ApiClient,
@@ -38,7 +38,7 @@ const transientGetRequestRetrySchedule = Schedule.exponential(
   "100 millis",
   2,
 ).pipe(Schedule.jittered);
-const apiHealthRefetchInterval = 30 * 1000;
+export const apiHealthRefetchInterval = 30 * 1000;
 
 const isTransientHttpResponse = (
   response: HttpClientResponse.HttpClientResponse,
@@ -83,7 +83,10 @@ const retryTransientGetRequests = (client: HttpClient.HttpClient) =>
       : effect,
   );
 
-function makeApiClientLive(fetchImplementation?: typeof fetch) {
+function makeApiClientLive(
+  apiBaseUrl: ApiBaseUrl,
+  fetchImplementation?: typeof fetch,
+) {
   const fetchHttpClientLayer =
     fetchImplementation === undefined
       ? FetchHttpClient.layer
@@ -115,14 +118,16 @@ const loadApiHealthStatus = Effect.fn("loadApiHealthStatus")(() =>
   }),
 );
 
-/** Create TanStack Query options for API health backed by the shared Effect HttpApi contract. */
-export function makeApiHealthQueryOptions(
-  options: Readonly<{ fetch?: typeof fetch }> = {},
+/** TanStack Query options for API health backed by the shared Effect HttpApi contract. */
+export function apiHealthQueryOptions(
+  options: Readonly<{ apiBaseUrl: ApiBaseUrl; fetch?: typeof fetch }>,
 ) {
-  const effectQuery = createEffectQuery(makeApiClientLive(options.fetch));
+  const effectQuery = createEffectQuery(
+    makeApiClientLive(options.apiBaseUrl, options.fetch),
+  );
 
   return effectQuery.queryOptions({
-    queryKey: ["api", "health"] as const,
+    queryKey: ["api", "health", options.apiBaseUrl.href] as const,
     refetchInterval: apiHealthRefetchInterval,
     queryFn: () =>
       loadApiHealthStatus().pipe(
@@ -133,6 +138,3 @@ export function makeApiHealthQueryOptions(
       ),
   });
 }
-
-/** TanStack Query options for API health using the runtime fetch implementation. */
-export const apiHealthQueryOptions = makeApiHealthQueryOptions();
