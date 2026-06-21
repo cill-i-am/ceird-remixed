@@ -1,11 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { apiHealthUrl } from "../public-config";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { apiHealthQueryOptions } from "../api-client";
+import { HealthBadge } from "../health-badge";
 
 export const Route = createFileRoute("/")({
+  loader: async ({ context }) => {
+    await context.queryClient.ensureQueryData(apiHealthQueryOptions);
+  },
   component: Home,
 });
 
 function Home() {
+  const { data: apiHealth } = useSuspenseQuery(apiHealthQueryOptions);
+
   return (
     <main className="page">
       <section className="intro" aria-labelledby="page-title">
@@ -16,9 +23,7 @@ function Home() {
           deployment graph as the Effect HTTP API.
         </p>
         <div className="actions">
-          <a className="button" href={apiHealthUrl}>
-            API health
-          </a>
+          <HealthBadge apiHealth={apiHealth} />
         </div>
       </section>
     </main>

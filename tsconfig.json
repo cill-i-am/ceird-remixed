@@ -21,5 +21,6 @@
     "apps/**/*.d.ts",
     "packages/**/*.ts",
     "types/**/*.d.ts"
-  ]
+  ],
+  "exclude": ["node_modules", "**/node_modules/**", "**/dist/**"]
 }

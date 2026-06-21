@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@ceird/api-contract": "workspace:*",
     "alchemy": "2.0.0-beta.57",
     "effect": "4.0.0-beta.85"
   }

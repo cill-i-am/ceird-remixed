@@ -27,6 +27,11 @@ These instructions apply to `apps/*` and refine the repository root `AGENTS.md`.
 - Use TanStack Start for rich web applications.
 - Keep TanStack Start routing, loaders, server functions, and app-shell concerns inside the web app package.
 - Put reusable UI primitives, domain models, API contracts, and shared client helpers in `packages/*` when they need to cross app boundaries.
+- Return plain serializable view models from TanStack loaders and server functions. Decode with Effect Schema at boundaries, but do not pass schema class instances, errors, resources, or other rich runtime objects through router serialization.
+- When using TanStack Query with TanStack Start, use the official router SSR query integration. Create a fresh `QueryClient` inside `getRouter`, put it in router context, prefetch critical data in loaders with `queryClient.ensureQueryData`, and read that data in components with `useSuspenseQuery`.
+- Keep loader prefetch functions narrow: `await queryClient.ensureQueryData(...)` without returning the data when the component reads it from TanStack Query. This keeps route-tree type inference smaller as the app grows.
+- Keep transport concerns out of components and route loaders. Effect HttpApi contracts own endpoint types and schemas; Effect HttpClient/FetchHttpClient layers own fetch, transient retries, timeouts, tracing, and rate limiting; TanStack Query owns UI cache policy, stale time, SSR hydration, polling/refetch intervals, and focus-driven refetching.
+- Apply automatic HTTP retries conservatively at the typed client or transport boundary. Retry transient `GET` requests by default; do not retry mutations unless the command has an explicit idempotency strategy such as an idempotency key, natural unique constraint, deduplication record, state-transition guard, or outbox/inbox.
 - Do not introduce another rich-app framework such as Next, Remix, or SvelteKit unless the user explicitly asks for it or the repo records a deliberate framework change.
 
 ## Public Config And Alchemy Inputs

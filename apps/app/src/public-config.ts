@@ -17,8 +17,3 @@ const parseApiBaseUrl = Schema.decodeUnknownSync(ApiBaseUrlSchema);
 export const apiBaseUrl: ApiBaseUrl = parseApiBaseUrl(
   import.meta.env.VITE_API_URL,
 );
-
-/**
- * URL for the API health endpoint.
- */
-export const apiHealthUrl = new URL("/health", apiBaseUrl).toString();

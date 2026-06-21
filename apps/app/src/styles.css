@@ -63,24 +63,36 @@ h1 {
   margin-top: 32px;
 }
 
-.button {
+.health-badge {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   border: 1px solid #121722;
   border-radius: 8px;
-  background: #121722;
-  color: #ffffff;
+  background: #ffffff;
+  color: #121722;
   font-weight: 700;
   padding: 0 18px;
-  text-decoration: none;
 }
 
-.button.disabled {
-  border-color: #b7b1a5;
-  background: transparent;
-  color: #686256;
+.health-badge.healthy {
+  border-color: #19706b;
+  color: #145b57;
+}
+
+.health-badge.unhealthy {
+  border-color: #b42c2c;
+  color: #8d2020;
+}
+
+.health-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 @media (max-width: 560px) {

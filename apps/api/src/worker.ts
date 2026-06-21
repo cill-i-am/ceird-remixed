@@ -5,7 +5,7 @@ import * as Etag from "effect/unstable/http/Etag";
 import * as HttpPlatform from "effect/unstable/http/HttpPlatform";
 import * as HttpRouter from "effect/unstable/http/HttpRouter";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
-import { Api, HealthResponse, HelloResponse } from "./api.ts";
+import { Api, HealthResponse, HelloResponse } from "@ceird/api-contract";
 
 const helloResponse = HelloResponse.make({
   ok: true,
@@ -48,7 +48,16 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
         Layer.provide([HttpPlatform.layer, Etag.layer]),
         Layer.provide(
           HttpRouter.cors({
-            allowedHeaders: ["Content-Type"],
+            allowedHeaders: [
+              "Accept",
+              "Authorization",
+              "Content-Type",
+              "b3",
+              "traceparent",
+              "x-b3-sampled",
+              "x-b3-spanid",
+              "x-b3-traceid",
+            ],
             allowedMethods: ["GET", "OPTIONS"],
             allowedOrigins: ["*"],
           }),

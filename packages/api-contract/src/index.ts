@@ -19,7 +19,7 @@ export class HelloResponse extends Schema.Class<HelloResponse>("HelloResponse")(
   stage: Schema.Literal("dummy"),
 }) {}
 
-/** Public HTTP contract for the API app. */
+/** Public HTTP contract for the Ceird API. */
 export const Api = HttpApi.make("CeirdApi").add(
   HttpApiGroup.make("Meta").add(
     HttpApiEndpoint.get("health", "/health", {

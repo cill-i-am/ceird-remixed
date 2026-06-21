@@ -27,6 +27,7 @@
     "@effect/platform-node": "4.0.0-beta.85",
     "alchemy": "2.0.0-beta.57",
     "opensrc": "^0.7.2",
+    "tsdown": "^0.22.3",
     "typescript": "^6.0.3"
   }
 }
