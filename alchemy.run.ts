@@ -26,6 +26,7 @@ export default Alchemy.Stack(
         flags: ["nodejs_compat"],
       },
       env: {
+        API_WORKER: api,
         API_URL: apiUrl,
       },
     });

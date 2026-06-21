@@ -28,16 +28,3 @@ test("renders an unhealthy API state", async () => {
 
   await expect.element(screen.getByText("API unhealthy")).toBeVisible();
 });
-
-test("renders a checking API state", async () => {
-  const screen = await render(
-    <HealthBadge
-      apiHealth={{
-        _tag: "Checking",
-        message: "API health check pending.",
-      }}
-    />,
-  );
-
-  await expect.element(screen.getByText("API checking")).toBeVisible();
-});

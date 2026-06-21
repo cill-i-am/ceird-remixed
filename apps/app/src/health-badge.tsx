@@ -5,15 +5,13 @@ export function HealthBadge({
   apiHealth,
 }: Readonly<{ apiHealth: ApiHealthStatus }>) {
   const apiHealthLabel =
-    apiHealth._tag === "Healthy"
-      ? `API ${apiHealth.status}`
-      : apiHealth._tag === "Checking"
-        ? "API checking"
-        : "API unhealthy";
-  const apiHealthClassName = `health-badge ${apiHealth._tag.toLowerCase()}`;
+    apiHealth._tag === "Healthy" ? `API ${apiHealth.status}` : "API unhealthy";
 
   return (
-    <div className={apiHealthClassName} aria-live="polite">
+    <div
+      className={`health-badge ${apiHealth._tag === "Healthy" ? "healthy" : "unhealthy"}`}
+      aria-live="polite"
+    >
       <span className="health-dot" aria-hidden="true" />
       <span>{apiHealthLabel}</span>
     </div>

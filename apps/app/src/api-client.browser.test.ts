@@ -28,20 +28,6 @@ describe("apiHealthQueryOptions", () => {
     ).toBe(apiHealthRefetchInterval);
   });
 
-  test("allows callers to disable API health fetching", () => {
-    const defaultQueryOptions = apiHealthQueryOptions({
-      apiBaseUrl: testApiBaseUrl,
-    });
-
-    expect(defaultQueryOptions.enabled).toBe(true);
-    expect(
-      apiHealthQueryOptions({
-        apiBaseUrl: testApiBaseUrl,
-        enabled: false,
-      }).enabled,
-    ).toBe(false);
-  });
-
   test("retries transient GET responses before returning a healthy result", async () => {
     const { calls, fetch } = makeFetch((callIndex) =>
       callIndex === 0

@@ -1,4 +1,6 @@
 import { Api, type HealthResponse } from "@ceird/api-contract";
+import { createIsomorphicFn } from "@tanstack/start-fn-stubs";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -19,10 +21,6 @@ class ApiClient extends Context.Service<
 /** API health state rendered by the web app. */
 export type ApiHealthStatus =
   | {
-      readonly _tag: "Checking";
-      readonly message: string;
-    }
-  | {
       readonly _tag: "Healthy";
       readonly service: HealthResponse["service"];
       readonly status: HealthResponse["status"];
@@ -32,15 +30,15 @@ export type ApiHealthStatus =
       readonly message: string;
     };
 
-export const checkingApiHealthStatus: ApiHealthStatus = {
-  _tag: "Checking",
-  message: "API health check pending.",
-};
-
 const unhealthyApiHealthStatus: ApiHealthStatus = {
   _tag: "Unhealthy",
   message: "API health check failed.",
 };
+
+const logApiHealthFailure = (cause: Cause.Cause<unknown>) =>
+  Effect.logWarning("API health check failed", {
+    cause: Cause.pretty(cause),
+  });
 
 const transientGetRequestRetryCount = 2;
 const transientGetRequestRetrySchedule = Schedule.exponential(
@@ -92,18 +90,58 @@ const retryTransientGetRequests = (client: HttpClient.HttpClient) =>
       : effect,
   );
 
+function omitUndefinedDuplex(init: RequestInit | undefined) {
+  if (
+    init === undefined ||
+    !("duplex" in init) ||
+    Reflect.get(init, "duplex") !== undefined
+  ) {
+    return init;
+  }
+
+  const normalizedInit = { ...init };
+  Reflect.deleteProperty(normalizedInit, "duplex");
+  return normalizedInit;
+}
+
+const workerCompatibleFetch: typeof fetch = (input, init) =>
+  globalThis.fetch(input, omitUndefinedDuplex(init));
+
+type CloudflareWorkersRuntime = {
+  readonly env: Cloudflare.Env;
+};
+
+const cloudflareWorkersModuleName = ["cloudflare", "workers"].join(":");
+
+async function importCloudflareWorkers(): Promise<CloudflareWorkersRuntime> {
+  return import(/* @vite-ignore */ cloudflareWorkersModuleName);
+}
+
+const getServerApiWorkerFetch = createIsomorphicFn()
+  .server(async (): Promise<typeof fetch | undefined> => {
+    const { env } = await importCloudflareWorkers();
+
+    return (input, init) =>
+      env.API_WORKER.fetch(input, omitUndefinedDuplex(init));
+  })
+  .client(() => undefined);
+
+const runtimeApiFetch: typeof fetch = async (input, init) => {
+  const serverApiWorkerFetch = await getServerApiWorkerFetch();
+  return (serverApiWorkerFetch ?? workerCompatibleFetch)(input, init);
+};
+
 function makeApiClientLive(
   apiBaseUrl: ApiBaseUrl,
   fetchImplementation?: typeof fetch,
 ) {
-  const fetchHttpClientLayer =
-    fetchImplementation === undefined
-      ? FetchHttpClient.layer
-      : FetchHttpClient.layer.pipe(
-          Layer.provide(
-            Layer.succeed(FetchHttpClient.Fetch)(fetchImplementation),
-          ),
-        );
+  const fetchHttpClientLayer = FetchHttpClient.layer.pipe(
+    Layer.provide(
+      Layer.succeed(FetchHttpClient.Fetch)(
+        fetchImplementation ?? runtimeApiFetch,
+      ),
+    ),
+  );
 
   return Layer.effect(
     ApiClient,
@@ -129,28 +167,22 @@ const loadApiHealthStatus = Effect.fn("loadApiHealthStatus")(() =>
 
 /** TanStack Query options for API health backed by the shared Effect HttpApi contract. */
 export function apiHealthQueryOptions(
-  options: Readonly<{
-    apiBaseUrl: ApiBaseUrl;
-    enabled?: boolean;
-    fetch?: typeof fetch;
-  }>,
+  options: Readonly<{ apiBaseUrl: ApiBaseUrl; fetch?: typeof fetch }>,
 ) {
   const effectQuery = createEffectQuery(
     makeApiClientLive(options.apiBaseUrl, options.fetch),
   );
-  const enabledOption =
-    options.enabled === undefined ? {} : { enabled: options.enabled };
 
   return effectQuery.queryOptions({
-    ...enabledOption,
     queryKey: ["api", "health", options.apiBaseUrl.href] as const,
     refetchInterval: apiHealthRefetchInterval,
     queryFn: () =>
       loadApiHealthStatus().pipe(
-        Effect.match({
-          onFailure: () => unhealthyApiHealthStatus,
-          onSuccess: (status) => status,
-        }),
+        Effect.catchCause((cause) =>
+          logApiHealthFailure(cause).pipe(
+            Effect.as(unhealthyApiHealthStatus),
+          ),
+        ),
       ),
   });
 }
