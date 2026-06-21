@@ -23,6 +23,21 @@ Use these repo-wide behavior rules when writing, reviewing, or refactoring code:
 - For refactors, preserve behavior and verify before and after when practical.
 - Every changed line should trace back to the user's request, the repo instructions, or required verification.
 
+## Oracle Second Opinions
+
+Oracle is installed on this machine as `oracle`, with `oracle-mcp` available for MCP clients. Use Oracle when a task would benefit from a second-model review with real repo context: subtle bugs, architectural tradeoffs, security or reliability reviews, risky refactors, confusing failures, or "I'm stuck" moments.
+
+- Run `oracle --help` once per session before first use.
+- Prefer the installed `oracle` binary in this repo. If it is unavailable, use `pnpm dlx @steipete/oracle` instead of `npx`.
+- Start with a dry run before sending context: `oracle --dry-run summary --files-report -p "<question>" --file "<paths>"`.
+- Include a concise project briefing in the prompt: pnpm monorepo, `apps/*`, `packages/*`, TypeScript, Effect, relevant build/test commands, and the constraints that matter.
+- Attach the relevant `AGENTS.md` files, configs, source files, tests, and docs. Prefer a tight file set over whole-repo dumps.
+- Do not attach secrets or local state, including `.env*`, key files, credentials, cookies, tokens, or user data.
+- Treat Oracle output as advisory. Verify recommendations against local code, types, tests, and these repo instructions before implementing.
+- Get explicit user consent before API runs such as `--engine api` or `--models`, because they can incur provider costs. Browser, dry-run, and render/copy flows do not need cost approval.
+- If a run detaches, times out, or a matching prompt is already active, use `oracle status --hours 72` and `oracle session <id> --render`; do not start duplicate runs unless the user asks.
+- Use `oracle --render --copy -p "<question>" --file "<paths>"` when browser automation or API access is blocked and manual paste is the safest path.
+
 ## Coding Standards
 
 For TypeScript work, use the repo-local `typescript-standards` skill in `.agents/skills/typescript-standards`.
