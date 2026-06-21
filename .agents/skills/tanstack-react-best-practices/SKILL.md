@@ -1,5 +1,5 @@
 ---
-name: vercel-react-best-practices
+name: tanstack-react-best-practices
 description: React performance guidance adapted for this pnpm, Vite, TanStack Start, TanStack Router, and TanStack Query repository. Use when writing, reviewing, refactoring, or optimizing React components, route loaders, TanStack Start server functions/routes, client/server serialization boundaries, bundle size, hydration, rendering performance, or client data fetching. Apply the rule catalog only through TanStack Start patterns and do not introduce framework APIs that conflict with this repo.
 ---
 
