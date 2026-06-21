@@ -37,8 +37,6 @@ These instructions apply to `apps/*` and refine the repository root `AGENTS.md`.
 ## Public Config And Alchemy Inputs
 
 - Prefer Alchemy stack wiring for app-to-app resource values. For example, a root stack may pass an API Worker URL into `Cloudflare.Vite` through a server-side env binding such as `env: { API_URL: api.url.as<string>() }`.
-- Use Cloudflare service bindings for Worker-to-Worker calls owned by app/server runtime code. Public Worker URLs are client/external boundaries; using them for SSR or server-side app-to-app calls can route differently from browser fetches and hide production-only failures.
-- When an app needs both browser access and server-side access to another Worker, pass both shapes explicitly from Alchemy: a public URL for public config and a private Worker binding for server transport.
 - Do not bake mutable stack-derived values into browser bundles with `VITE_*` when the app may need to swap them without a rebuild. Read those values on the TanStack Start server side and expose only the allowed public subset to the browser.
 - Model server config with one Effect Schema source of truth. Derive client-visible config from that schema with an explicit allowlist, for example `ServerConfigSchema.mapFields(({ apiBaseUrl }) => ({ apiBaseUrl }))`; do not duplicate parallel server/public schemas by hand.
 - Treat public config as a boundary crossing. Decode and brand values with Effect Schema before use, and use role-specific branded types for URL-shaped values such as `ApiBaseUrl`, `AppBaseUrl`, or `AssetBaseUrl`.
