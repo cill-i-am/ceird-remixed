@@ -1,4 +1,3 @@
-import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -12,25 +11,6 @@ const helloResponse = HelloResponse.make({
   ok: true,
   message: "Hello from an Effect HttpApi on Cloudflare Workers.",
   stage: "dummy",
-});
-
-const productionApiHostname = "remixed-api.ceird.app";
-
-const apiWorkerProps = Effect.gen(function* () {
-  const stage = yield* Alchemy.Stage;
-
-  return {
-    main: import.meta.filename,
-    url: true,
-    ...(stage === "prod" ? { domain: productionApiHostname } : {}),
-    observability: {
-      enabled: true,
-      logs: {
-        enabled: true,
-        invocationLogs: true,
-      },
-    },
-  };
 });
 
 const handlers = HttpApiBuilder.group(Api, "Meta", (group) =>
@@ -50,7 +30,17 @@ const handlers = HttpApiBuilder.group(Api, "Meta", (group) =>
 
 export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
   "Api",
-  apiWorkerProps,
+  {
+    main: import.meta.filename,
+    url: true,
+    observability: {
+      enabled: true,
+      logs: {
+        enabled: true,
+        invocationLogs: true,
+      },
+    },
+  },
   Effect.gen(function* () {
     return {
       fetch: HttpApiBuilder.layer(Api).pipe(

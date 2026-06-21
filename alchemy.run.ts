@@ -9,6 +9,8 @@ import ApiWorker from "./apps/api/src/worker.ts";
 
 const repositoryOwner = "cill-i-am";
 const repositoryName = "ceird-remixed";
+const productionApiHostname = "remixed-api.ceird.app";
+const productionApiUrl = `https://${productionApiHostname}`;
 
 export default Alchemy.Stack(
   "ceird-remixed",
@@ -17,8 +19,23 @@ export default Alchemy.Stack(
     state: Cloudflare.state(),
   },
   Effect.gen(function* () {
+    const stage = yield* Alchemy.Stage;
     const api = yield* ApiWorker;
-    const apiUrl = api.url.as<string>();
+    const apiUrl =
+      stage === "prod" ? productionApiUrl : api.url.as<string>();
+
+    if (stage === "prod") {
+      const zone = yield* Cloudflare.Zone("CeirdZone", {
+        name: "ceird.app",
+      }).pipe(Alchemy.AdoptPolicy.adopt(true));
+
+      yield* Cloudflare.WorkerRoute("ApiRoute", {
+        zoneId: zone.zoneId,
+        pattern: `${productionApiHostname}/*`,
+        script: api.workerName,
+      }).pipe(Alchemy.AdoptPolicy.adopt(true));
+    }
+
     const app = yield* Cloudflare.Vite("App", {
       rootDir: "apps/app",
       url: true,
