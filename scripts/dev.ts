@@ -21,6 +21,10 @@ import {
   portlessListHasAliasRoute,
 } from "./local-dev/portless-output.ts";
 import {
+  commandIsAlchemyDevStage,
+  parseLocalProcessLine,
+} from "./local-dev/processes.ts";
+import {
   makeDefaultLocalAlchemyStage,
   makeLocalDevTopology,
   normalizeLocalAlchemyStage,
@@ -42,16 +46,19 @@ class CommandFailed extends Schema.TaggedErrorClass<CommandFailed>()(
   },
 ) {}
 
+class ProcessSignalFailed extends Schema.TaggedErrorClass<ProcessSignalFailed>()(
+  "ProcessSignalFailed",
+  {
+    target: Schema.String,
+    signal: Schema.Literals(["SIGTERM", "SIGKILL"]),
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
+
 type CommandResult = {
   readonly stdout: string;
   readonly stderr: string;
-};
-
-type LocalProcess = {
-  readonly pid: number;
-  readonly parentPid: number;
-  readonly processGroupId: number;
-  readonly command: string;
 };
 
 type RunCommandOptions = {
@@ -59,6 +66,13 @@ type RunCommandOptions = {
   readonly env?: NodeJS.ProcessEnv;
   readonly mirrorOutput?: boolean;
 };
+
+type CleanupSignal = "SIGTERM" | "SIGKILL";
+
+type ProcessSignalResult =
+  | { readonly _tag: "signaled" }
+  | { readonly _tag: "missing" }
+  | { readonly _tag: "failed"; readonly error: ProcessSignalFailed };
 
 const portlessEnvOverrides = {
   PORTLESS: "1",
@@ -355,6 +369,16 @@ function isErrnoException(cause: unknown): cause is NodeJS.ErrnoException {
   return cause instanceof Error && "code" in cause;
 }
 
+function formatCleanupFailure(cause: unknown) {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
+function logLocalDevCleanupFailure(message: string, cause: unknown) {
+  return Effect.sync(() => {
+    stderr.write(`${message}: ${formatCleanupFailure(cause)}\n`);
+  });
+}
+
 function processGroupHasMembers(processGroupId: number) {
   try {
     killProcess(-processGroupId, 0);
@@ -364,80 +388,144 @@ function processGroupHasMembers(processGroupId: number) {
   }
 }
 
-function signalProcessGroup(processGroupId: number, signal: NodeJS.Signals) {
+function signalProcessGroup(
+  processGroupId: number,
+  signal: CleanupSignal,
+): ProcessSignalResult {
   try {
     killProcess(-processGroupId, signal);
-    return true;
+    return { _tag: "signaled" };
   } catch (cause) {
-    return !(isErrnoException(cause) && cause.code === "ESRCH");
+    if (isErrnoException(cause) && cause.code === "ESRCH") {
+      return { _tag: "missing" };
+    }
+
+    return {
+      _tag: "failed",
+      error: ProcessSignalFailed.make({
+        target: `process group ${processGroupId}`,
+        signal,
+        message: "Failed to signal process group.",
+        cause,
+      }),
+    };
   }
 }
 
 function terminateProcessGroup(processGroupId: number) {
-  return Effect.callback<void>((resume) => {
+  return Effect.callback<void, ProcessSignalFailed>((resume) => {
     if (!processGroupHasMembers(processGroupId)) {
       resume(Effect.void);
       return Effect.void;
     }
 
     let completed = false;
+    let pollTimer: NodeJS.Timeout | undefined;
+    let killTimer: NodeJS.Timeout | undefined;
     let forceExitTimer: NodeJS.Timeout | undefined;
+    const clearTimers = () => {
+      if (pollTimer !== undefined) {
+        clearInterval(pollTimer);
+      }
+      if (killTimer !== undefined) {
+        clearTimeout(killTimer);
+      }
+      if (forceExitTimer !== undefined) {
+        clearTimeout(forceExitTimer);
+      }
+    };
     const complete = () => {
       if (completed) {
         return;
       }
 
       completed = true;
-      clearInterval(pollTimer);
-      clearTimeout(killTimer);
-      if (forceExitTimer !== undefined) {
-        clearTimeout(forceExitTimer);
-      }
+      clearTimers();
       resume(Effect.void);
     };
-    const pollTimer = setInterval(() => {
+    const fail = (error: ProcessSignalFailed) => {
+      if (completed) {
+        return;
+      }
+
+      completed = true;
+      clearTimers();
+      resume(Effect.fail(error));
+    };
+    pollTimer = setInterval(() => {
       if (!processGroupHasMembers(processGroupId)) {
         complete();
       }
     }, processGroupPollIntervalMs);
-    const killTimer = setTimeout(() => {
-      signalProcessGroup(processGroupId, "SIGKILL");
+    killTimer = setTimeout(() => {
+      const result = signalProcessGroup(processGroupId, "SIGKILL");
+
+      if (result._tag === "failed") {
+        fail(result.error);
+        return;
+      }
+
       forceExitTimer = setTimeout(complete, processGroupForceExitGraceMs);
     }, childShutdownTimeoutMs);
 
-    if (!signalProcessGroup(processGroupId, "SIGTERM")) {
+    const result = signalProcessGroup(processGroupId, "SIGTERM");
+
+    if (result._tag === "failed") {
+      fail(result.error);
+    } else if (result._tag === "missing") {
       complete();
     }
 
     return Effect.sync(() => {
-      clearInterval(pollTimer);
-      clearTimeout(killTimer);
-      if (forceExitTimer !== undefined) {
-        clearTimeout(forceExitTimer);
-      }
+      clearTimers();
     });
   });
+}
+
+function signalChildProcess(
+  child: ChildProcess,
+  signal: CleanupSignal,
+): ProcessSignalResult {
+  if (childHasExited(child)) {
+    return { _tag: "missing" };
+  }
+
+  try {
+    if (child.kill(signal)) {
+      return { _tag: "signaled" };
+    }
+
+    return { _tag: "missing" };
+  } catch (cause) {
+    if (isErrnoException(cause) && cause.code === "ESRCH") {
+      return { _tag: "missing" };
+    }
+
+    return {
+      _tag: "failed",
+      error: ProcessSignalFailed.make({
+        target:
+          child.pid === undefined
+            ? "child process"
+            : `child process ${child.pid}`,
+        signal,
+        message: "Failed to signal child process.",
+        cause,
+      }),
+    };
+  }
 }
 
 function signalOwnedProcess(
   child: ChildProcess,
   processGroupId: number | undefined,
-  signal: NodeJS.Signals,
-) {
+  signal: CleanupSignal,
+): ProcessSignalResult {
   if (processGroupId !== undefined) {
     return signalProcessGroup(processGroupId, signal);
   }
 
-  if (childHasExited(child)) {
-    return false;
-  }
-
-  try {
-    child.kill(signal);
-    return true;
-  } catch {
-    return false;
-  }
+  return signalChildProcess(child, signal);
 }
 
 function ownedProcessIsRunning(
@@ -457,114 +545,82 @@ function terminateChildProcess(
     return terminateProcessGroup(processGroupId);
   }
 
-  return Effect.callback<void>((resume) => {
+  return Effect.callback<void, ProcessSignalFailed>((resume) => {
     if (!ownedProcessIsRunning(child, processGroupId)) {
       resume(Effect.void);
       return Effect.void;
     }
 
     let completed = false;
+    let pollTimer: NodeJS.Timeout | undefined;
+    let killTimer: NodeJS.Timeout | undefined;
     let forceExitTimer: NodeJS.Timeout | undefined;
+    const clearTimers = () => {
+      if (pollTimer !== undefined) {
+        clearInterval(pollTimer);
+      }
+      if (killTimer !== undefined) {
+        clearTimeout(killTimer);
+      }
+      if (forceExitTimer !== undefined) {
+        clearTimeout(forceExitTimer);
+      }
+    };
     const complete = () => {
       if (completed) {
         return;
       }
 
       completed = true;
-      clearInterval(pollTimer);
-      clearTimeout(killTimer);
-      if (forceExitTimer !== undefined) {
-        clearTimeout(forceExitTimer);
-      }
+      clearTimers();
       resume(Effect.void);
     };
-    const pollTimer = setInterval(() => {
+    const fail = (error: ProcessSignalFailed) => {
+      if (completed) {
+        return;
+      }
+
+      completed = true;
+      clearTimers();
+      resume(Effect.fail(error));
+    };
+    pollTimer = setInterval(() => {
       if (!ownedProcessIsRunning(child, processGroupId)) {
         complete();
       }
     }, processGroupPollIntervalMs);
-    const killTimer = setTimeout(() => {
-      signalOwnedProcess(child, processGroupId, "SIGKILL");
+    killTimer = setTimeout(() => {
+      const result = signalOwnedProcess(child, processGroupId, "SIGKILL");
+
+      if (result._tag === "failed") {
+        fail(result.error);
+        return;
+      }
+
       forceExitTimer = setTimeout(complete, processGroupForceExitGraceMs);
     }, childShutdownTimeoutMs);
 
-    if (!signalOwnedProcess(child, processGroupId, "SIGTERM")) {
+    const result = signalOwnedProcess(child, processGroupId, "SIGTERM");
+
+    if (result._tag === "failed") {
+      fail(result.error);
+    } else if (result._tag === "missing") {
       complete();
     }
 
     return Effect.sync(() => {
-      clearInterval(pollTimer);
-      clearTimeout(killTimer);
-      if (forceExitTimer !== undefined) {
-        clearTimeout(forceExitTimer);
-      }
+      clearTimers();
     });
   });
-}
-
-function parseLocalProcess(line: string): LocalProcess | undefined {
-  const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.+)$/.exec(line);
-
-  if (match === null) {
-    return undefined;
-  }
-
-  const rawPid = match[1];
-  const rawParentPid = match[2];
-  const rawProcessGroupId = match[3];
-  const command = match[4];
-
-  if (
-    rawPid === undefined ||
-    rawParentPid === undefined ||
-    rawProcessGroupId === undefined ||
-    command === undefined
-  ) {
-    return undefined;
-  }
-
-  const pid = parseProcessNumber(rawPid);
-  const parentPid = parseProcessNumber(rawParentPid);
-  const processGroupId = parseProcessNumber(rawProcessGroupId);
-
-  if (
-    pid === undefined ||
-    parentPid === undefined ||
-    processGroupId === undefined
-  ) {
-    return undefined;
-  }
-
-  return {
-    command,
-    parentPid,
-    pid,
-    processGroupId,
-  };
-}
-
-function parseProcessNumber(input: string) {
-  const parsed = Number.parseInt(input, 10);
-
-  return Number.isSafeInteger(parsed) ? parsed : undefined;
-}
-
-function commandIsAlchemyDevStage(
-  command: string,
-  stage: LocalAlchemyStage,
-) {
-  return (
-    command.includes("alchemy.run.ts") &&
-    (
-      command.includes(`--stage ${stage}`) ||
-      command.includes(`--stage=${stage}`)
-    )
-  );
 }
 
 const findAlchemyDevProcessGroups = Effect.fn(
   "findAlchemyDevProcessGroups",
 )(function* (stage: LocalAlchemyStage) {
+  if (platform === "win32") {
+    return new Set<number>();
+  }
+
   const result = yield* runCommand("ps", [
     "-axo",
     "pid=,ppid=,pgid=,command=",
@@ -574,7 +630,7 @@ const findAlchemyDevProcessGroups = Effect.fn(
   const processGroupIds = new Set<number>();
 
   for (const line of result.stdout.split(/\r?\n/)) {
-    const localProcess = parseLocalProcess(line);
+    const localProcess = parseLocalProcessLine(line);
 
     if (
       localProcess !== undefined &&
@@ -594,9 +650,27 @@ const cleanupAlchemyDevProcesses = Effect.fn(
   const processGroupIds = yield* findAlchemyDevProcessGroups(stage);
 
   for (const processGroupId of processGroupIds) {
-    yield* terminateProcessGroup(processGroupId);
+    yield* terminateProcessGroup(processGroupId).pipe(
+      Effect.catch((cause) =>
+        logLocalDevCleanupFailure(
+          `Failed to terminate local Alchemy dev process group ${processGroupId}`,
+          cause,
+        ),
+      ),
+    );
   }
 });
+
+function cleanupAlchemyDevProcessesBestEffort(stage: LocalAlchemyStage) {
+  return cleanupAlchemyDevProcesses(stage).pipe(
+    Effect.catch((cause) =>
+      logLocalDevCleanupFailure(
+        "Failed to clean up local Alchemy dev processes",
+        cause,
+      ),
+    ),
+  );
+}
 
 function cleanupRegisteredAliases(
   services: ReadonlyMap<LocalHttpServiceName, LocalHttpService>,
@@ -617,8 +691,15 @@ function cleanupAlchemyDev(
 ) {
   return Effect.gen(function* () {
     if (options.terminateChild) {
-      yield* terminateChildProcess(child, processGroupId);
-      yield* cleanupAlchemyDevProcesses(stage);
+      yield* terminateChildProcess(child, processGroupId).pipe(
+        Effect.catch((cause) =>
+          logLocalDevCleanupFailure(
+            "Failed to terminate the local Alchemy dev process group",
+            cause,
+          ),
+        ),
+      );
+      yield* cleanupAlchemyDevProcessesBestEffort(stage);
     }
 
     yield* cleanupRegisteredAliases(services);
@@ -693,7 +774,7 @@ const runAlchemyDev = Effect.fn("runAlchemyDev")(function* (
         ),
       )
         .catch((cause) => {
-          stderr.write(`Failed to clean up local dev aliases: ${String(cause)}\n`);
+          stderr.write(`Failed to clean up local dev: ${String(cause)}\n`);
         })
         .finally(() => {
           resume(effect);
@@ -712,12 +793,19 @@ const runAlchemyDev = Effect.fn("runAlchemyDev")(function* (
       completed = true;
       clearReadinessTimer();
       unregisterProcessHooks();
-      cleanupRegisteredAliasesSync(registeredServices);
       Effect.runPromise(
-        terminateChildProcess(child, processGroupId),
+        cleanupAlchemyDev(
+          topology.stage,
+          child,
+          processGroupId,
+          registeredServices,
+          {
+            terminateChild: true,
+          },
+        ),
       )
         .catch((cause) => {
-          stderr.write(`Failed to clean up local dev aliases: ${String(cause)}\n`);
+          stderr.write(`Failed to clean up local dev: ${String(cause)}\n`);
         })
         .finally(() => {
           process.exit(signalExitCodes[signal]);
@@ -902,7 +990,7 @@ const devCommand = Command.make(
 
     if (cleanupOnly) {
       const topology = makeLocalDevTopology(resolvedStage);
-      yield* cleanupAlchemyDevProcesses(topology.stage);
+      yield* cleanupAlchemyDevProcessesBestEffort(topology.stage);
       yield* cleanupRegisteredAliases(
         new Map([
           [topology.app.name, topology.app],
