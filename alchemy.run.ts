@@ -5,7 +5,9 @@ import * as Output from "alchemy/Output";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import ApiWorker from "./apps/api/src/worker.ts";
+import { LocalServiceOriginSchema } from "./scripts/local-dev/topology.ts";
 
 const repositoryOwner = "cill-i-am";
 const repositoryName = "ceird-remixed";
@@ -21,8 +23,28 @@ export default Alchemy.Stack(
   Effect.gen(function* () {
     const stage = yield* Alchemy.Stage;
     const api = yield* ApiWorker;
+    const alchemyContext = yield* Alchemy.AlchemyContext;
+    const localOriginConfig = Config.all({
+      api: Config.schema(
+        LocalServiceOriginSchema,
+        "CEIRD_LOCAL_API_ORIGIN",
+      ),
+      app: Config.schema(
+        LocalServiceOriginSchema,
+        "CEIRD_LOCAL_APP_ORIGIN",
+      ),
+    });
+    const localOrigins = alchemyContext.dev
+      ? yield* Config.option(localOriginConfig)
+      : undefined;
+    const hasLocalOrigins =
+      localOrigins !== undefined && Option.isSome(localOrigins);
     const apiUrl =
-      stage === "prod" ? productionApiUrl : api.url.as<string>();
+      hasLocalOrigins
+        ? localOrigins.value.api.href
+        : stage === "prod"
+          ? productionApiUrl
+          : api.url.as<string>();
 
     if (stage === "prod") {
       const zone = yield* Cloudflare.Zone("CeirdZone", {
@@ -46,7 +68,10 @@ export default Alchemy.Stack(
         API_URL: apiUrl,
       },
     });
-    const appUrl = app.url.as<string>();
+    const appUrl =
+      hasLocalOrigins
+        ? localOrigins.value.app.href
+        : app.url.as<string>();
     const pullRequest = yield* Config.string("PULL_REQUEST").pipe(
       Config.withDefault(""),
     );
@@ -73,9 +98,16 @@ export default Alchemy.Stack(
       });
     }
 
-    return {
-      apiUrl,
-      appUrl,
-    };
+    return alchemyContext.dev
+      ? {
+          apiUrl,
+          appUrl,
+          localApiTargetUrl: api.url.as<string>(),
+          localAppTargetUrl: app.url.as<string>(),
+        }
+      : {
+          apiUrl,
+          appUrl,
+        };
   }),
 );

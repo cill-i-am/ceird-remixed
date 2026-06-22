@@ -4,11 +4,12 @@
   "type": "module",
   "packageManager": "pnpm@11.5.2",
   "scripts": {
-    "dev": "pnpm exec alchemy dev alchemy.run.ts --stage dev_$USER",
+    "dev": "./scripts/dev.sh",
     "dev:workspace": "pnpm -r --parallel --if-present dev",
     "build": "pnpm -r --if-present build",
     "check": "tsc --noEmit && pnpm -r --if-present check",
-    "alchemy:dev": "pnpm exec alchemy dev alchemy.run.ts --stage dev_$USER",
+    "alchemy:dev": "./scripts/dev.sh",
+    "alchemy:dev:raw": "pnpm exec alchemy dev alchemy.run.ts --stage dev_$USER",
     "alchemy:plan": "pnpm exec alchemy plan alchemy.run.ts",
     "alchemy:plan:ci": "pnpm exec alchemy plan stacks/github.ts --stage prod --profile ${ALCHEMY_BOOTSTRAP_PROFILE:-ceird-admin-global}",
     "alchemy:bootstrap-ci": "pnpm exec alchemy deploy stacks/github.ts --stage prod --profile ${ALCHEMY_BOOTSTRAP_PROFILE:-ceird-admin-global}",
@@ -17,7 +18,8 @@
     "alchemy:destroy": "pnpm exec alchemy destroy alchemy.run.ts",
     "opensrc:effect": "./scripts/ensure-effect-source.sh",
     "postinstall": "./scripts/ensure-effect-source.sh",
-    "test": "pnpm -r --if-present test"
+    "test": "pnpm run test:scripts && pnpm -r --if-present test",
+    "test:scripts": "tsx --test \"scripts/**/*.test.ts\""
   },
   "dependencies": {
     "effect": "4.0.0-beta.85"
@@ -25,9 +27,12 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260619.1",
     "@effect/platform-node": "4.0.0-beta.85",
+    "@types/node": "^26.0.0",
     "alchemy": "2.0.0-beta.57",
     "opensrc": "^0.7.2",
+    "portless": "^0.14.0",
     "tsdown": "^0.22.3",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }
 }
