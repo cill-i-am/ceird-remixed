@@ -47,6 +47,13 @@ type CommandResult = {
   readonly stderr: string;
 };
 
+type LocalProcess = {
+  readonly pid: number;
+  readonly parentPid: number;
+  readonly processGroupId: number;
+  readonly command: string;
+};
+
 type RunCommandOptions = {
   readonly stdio: "pipe" | "inherit";
   readonly env?: NodeJS.ProcessEnv;
@@ -73,6 +80,8 @@ const signalExitCodes = {
   SIGINT: 130,
   SIGTERM: 143,
 } as const satisfies Record<"SIGINT" | "SIGTERM", number>;
+const processGroupPollIntervalMs = 100;
+const processGroupForceExitGraceMs = 1_000;
 
 const runCommand = Effect.fn("runCommand")(function* (
   command: string,
@@ -342,54 +351,252 @@ function childHasExited(child: ChildProcess) {
   return child.exitCode !== null || child.signalCode !== null;
 }
 
-function signalChildProcess(child: ChildProcess, signal: NodeJS.Signals) {
-  if (childHasExited(child)) {
-    return;
-  }
+function isErrnoException(cause: unknown): cause is NodeJS.ErrnoException {
+  return cause instanceof Error && "code" in cause;
+}
 
+function processGroupHasMembers(processGroupId: number) {
   try {
-    if (platform === "win32" || child.pid === undefined) {
-      child.kill(signal);
-    } else {
-      killProcess(-child.pid, signal);
-    }
-  } catch {
-    child.kill(signal);
+    killProcess(-processGroupId, 0);
+    return true;
+  } catch (cause) {
+    return !(isErrnoException(cause) && cause.code === "ESRCH");
   }
 }
 
-function terminateChildProcess(child: ChildProcess) {
+function signalProcessGroup(processGroupId: number, signal: NodeJS.Signals) {
+  try {
+    killProcess(-processGroupId, signal);
+    return true;
+  } catch (cause) {
+    return !(isErrnoException(cause) && cause.code === "ESRCH");
+  }
+}
+
+function terminateProcessGroup(processGroupId: number) {
   return Effect.callback<void>((resume) => {
-    if (childHasExited(child)) {
+    if (!processGroupHasMembers(processGroupId)) {
       resume(Effect.void);
       return Effect.void;
     }
 
     let completed = false;
+    let forceExitTimer: NodeJS.Timeout | undefined;
     const complete = () => {
       if (completed) {
         return;
       }
 
       completed = true;
+      clearInterval(pollTimer);
       clearTimeout(killTimer);
-      child.off("exit", complete);
+      if (forceExitTimer !== undefined) {
+        clearTimeout(forceExitTimer);
+      }
       resume(Effect.void);
     };
+    const pollTimer = setInterval(() => {
+      if (!processGroupHasMembers(processGroupId)) {
+        complete();
+      }
+    }, processGroupPollIntervalMs);
     const killTimer = setTimeout(() => {
-      signalChildProcess(child, "SIGKILL");
-      complete();
+      signalProcessGroup(processGroupId, "SIGKILL");
+      forceExitTimer = setTimeout(complete, processGroupForceExitGraceMs);
     }, childShutdownTimeoutMs);
 
-    child.once("exit", complete);
-    signalChildProcess(child, "SIGTERM");
+    if (!signalProcessGroup(processGroupId, "SIGTERM")) {
+      complete();
+    }
 
     return Effect.sync(() => {
+      clearInterval(pollTimer);
       clearTimeout(killTimer);
-      child.off("exit", complete);
+      if (forceExitTimer !== undefined) {
+        clearTimeout(forceExitTimer);
+      }
     });
   });
 }
+
+function signalOwnedProcess(
+  child: ChildProcess,
+  processGroupId: number | undefined,
+  signal: NodeJS.Signals,
+) {
+  if (processGroupId !== undefined) {
+    return signalProcessGroup(processGroupId, signal);
+  }
+
+  if (childHasExited(child)) {
+    return false;
+  }
+
+  try {
+    child.kill(signal);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function ownedProcessIsRunning(
+  child: ChildProcess,
+  processGroupId: number | undefined,
+) {
+  return processGroupId === undefined
+    ? !childHasExited(child)
+    : processGroupHasMembers(processGroupId);
+}
+
+function terminateChildProcess(
+  child: ChildProcess,
+  processGroupId: number | undefined,
+) {
+  if (processGroupId !== undefined) {
+    return terminateProcessGroup(processGroupId);
+  }
+
+  return Effect.callback<void>((resume) => {
+    if (!ownedProcessIsRunning(child, processGroupId)) {
+      resume(Effect.void);
+      return Effect.void;
+    }
+
+    let completed = false;
+    let forceExitTimer: NodeJS.Timeout | undefined;
+    const complete = () => {
+      if (completed) {
+        return;
+      }
+
+      completed = true;
+      clearInterval(pollTimer);
+      clearTimeout(killTimer);
+      if (forceExitTimer !== undefined) {
+        clearTimeout(forceExitTimer);
+      }
+      resume(Effect.void);
+    };
+    const pollTimer = setInterval(() => {
+      if (!ownedProcessIsRunning(child, processGroupId)) {
+        complete();
+      }
+    }, processGroupPollIntervalMs);
+    const killTimer = setTimeout(() => {
+      signalOwnedProcess(child, processGroupId, "SIGKILL");
+      forceExitTimer = setTimeout(complete, processGroupForceExitGraceMs);
+    }, childShutdownTimeoutMs);
+
+    if (!signalOwnedProcess(child, processGroupId, "SIGTERM")) {
+      complete();
+    }
+
+    return Effect.sync(() => {
+      clearInterval(pollTimer);
+      clearTimeout(killTimer);
+      if (forceExitTimer !== undefined) {
+        clearTimeout(forceExitTimer);
+      }
+    });
+  });
+}
+
+function parseLocalProcess(line: string): LocalProcess | undefined {
+  const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.+)$/.exec(line);
+
+  if (match === null) {
+    return undefined;
+  }
+
+  const rawPid = match[1];
+  const rawParentPid = match[2];
+  const rawProcessGroupId = match[3];
+  const command = match[4];
+
+  if (
+    rawPid === undefined ||
+    rawParentPid === undefined ||
+    rawProcessGroupId === undefined ||
+    command === undefined
+  ) {
+    return undefined;
+  }
+
+  const pid = parseProcessNumber(rawPid);
+  const parentPid = parseProcessNumber(rawParentPid);
+  const processGroupId = parseProcessNumber(rawProcessGroupId);
+
+  if (
+    pid === undefined ||
+    parentPid === undefined ||
+    processGroupId === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    command,
+    parentPid,
+    pid,
+    processGroupId,
+  };
+}
+
+function parseProcessNumber(input: string) {
+  const parsed = Number.parseInt(input, 10);
+
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function commandIsAlchemyDevStage(
+  command: string,
+  stage: LocalAlchemyStage,
+) {
+  return (
+    command.includes("alchemy.run.ts") &&
+    (
+      command.includes(`--stage ${stage}`) ||
+      command.includes(`--stage=${stage}`)
+    )
+  );
+}
+
+const findAlchemyDevProcessGroups = Effect.fn(
+  "findAlchemyDevProcessGroups",
+)(function* (stage: LocalAlchemyStage) {
+  const result = yield* runCommand("ps", [
+    "-axo",
+    "pid=,ppid=,pgid=,command=",
+  ], {
+    stdio: "pipe",
+  });
+  const processGroupIds = new Set<number>();
+
+  for (const line of result.stdout.split(/\r?\n/)) {
+    const localProcess = parseLocalProcess(line);
+
+    if (
+      localProcess !== undefined &&
+      localProcess.processGroupId !== process.pid &&
+      commandIsAlchemyDevStage(localProcess.command, stage)
+    ) {
+      processGroupIds.add(localProcess.processGroupId);
+    }
+  }
+
+  return processGroupIds;
+});
+
+const cleanupAlchemyDevProcesses = Effect.fn(
+  "cleanupAlchemyDevProcesses",
+)(function* (stage: LocalAlchemyStage) {
+  const processGroupIds = yield* findAlchemyDevProcessGroups(stage);
+
+  for (const processGroupId of processGroupIds) {
+    yield* terminateProcessGroup(processGroupId);
+  }
+});
 
 function cleanupRegisteredAliases(
   services: ReadonlyMap<LocalHttpServiceName, LocalHttpService>,
@@ -402,13 +609,16 @@ function cleanupRegisteredAliases(
 }
 
 function cleanupAlchemyDev(
+  stage: LocalAlchemyStage,
   child: ChildProcess,
+  processGroupId: number | undefined,
   services: ReadonlyMap<LocalHttpServiceName, LocalHttpService>,
   options: Readonly<{ terminateChild: boolean }>,
 ) {
   return Effect.gen(function* () {
     if (options.terminateChild) {
-      yield* terminateChildProcess(child);
+      yield* terminateChildProcess(child, processGroupId);
+      yield* cleanupAlchemyDevProcesses(stage);
     }
 
     yield* cleanupRegisteredAliases(services);
@@ -436,6 +646,8 @@ const runAlchemyDev = Effect.fn("runAlchemyDev")(function* (
       env: childEnv,
       stdio: ["inherit", "pipe", "pipe"],
     });
+    const processGroupId =
+      platform === "win32" ? undefined : child.pid;
     let completed = false;
     let readinessTimer: NodeJS.Timeout | undefined;
     let registrationChain = Promise.resolve();
@@ -472,7 +684,13 @@ const runAlchemyDev = Effect.fn("runAlchemyDev")(function* (
       clearReadinessTimer();
       unregisterProcessHooks();
       Effect.runPromise(
-        cleanupAlchemyDev(child, registeredServices, cleanupOptions),
+        cleanupAlchemyDev(
+          topology.stage,
+          child,
+          processGroupId,
+          registeredServices,
+          cleanupOptions,
+        ),
       )
         .catch((cause) => {
           stderr.write(`Failed to clean up local dev aliases: ${String(cause)}\n`);
@@ -496,7 +714,7 @@ const runAlchemyDev = Effect.fn("runAlchemyDev")(function* (
       unregisterProcessHooks();
       cleanupRegisteredAliasesSync(registeredServices);
       Effect.runPromise(
-        terminateChildProcess(child),
+        terminateChildProcess(child, processGroupId),
       )
         .catch((cause) => {
           stderr.write(`Failed to clean up local dev aliases: ${String(cause)}\n`);
@@ -598,7 +816,7 @@ const runAlchemyDev = Effect.fn("runAlchemyDev")(function* (
 
     child.on("exit", (exitCode, signal) => {
       if (exitCode === 0) {
-        completeAfterCleanup(Effect.void, { terminateChild: false });
+        completeAfterCleanup(Effect.void, { terminateChild: true });
         return;
       }
 
@@ -613,16 +831,28 @@ const runAlchemyDev = Effect.fn("runAlchemyDev")(function* (
             ...(exitCode === null ? {} : { exitCode }),
           }),
         ),
-        { terminateChild: false },
+        { terminateChild: true },
       );
     });
 
     return Effect.gen(function* () {
       unregisterProcessHooks();
-      yield* cleanupAlchemyDev(child, registeredServices, {
-        terminateChild: true,
-      });
-    });
+      yield* cleanupAlchemyDev(
+        topology.stage,
+        child,
+        processGroupId,
+        registeredServices,
+        {
+          terminateChild: true,
+        },
+      );
+    }).pipe(
+      Effect.catch((cause) =>
+        Effect.sync(() => {
+          stderr.write(`Failed to clean up local dev: ${String(cause)}\n`);
+        }),
+      ),
+    );
   });
 });
 
@@ -672,6 +902,7 @@ const devCommand = Command.make(
 
     if (cleanupOnly) {
       const topology = makeLocalDevTopology(resolvedStage);
+      yield* cleanupAlchemyDevProcesses(topology.stage);
       yield* cleanupRegisteredAliases(
         new Map([
           [topology.app.name, topology.app],
