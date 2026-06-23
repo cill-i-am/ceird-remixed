@@ -43,7 +43,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       <head>
         <HeadContent />
       </head>
-      <body>
+      <body className="m-0 min-h-screen min-w-[320px] bg-[#f7f5ef] font-sans leading-normal text-[#18202b]">
         {children}
         <Scripts />
       </body>
