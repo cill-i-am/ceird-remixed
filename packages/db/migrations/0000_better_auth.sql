@@ -60,3 +60,4 @@ CREATE UNIQUE INDEX "session_token_unique" ON "session" USING btree ("token");
 CREATE INDEX "session_user_id_idx" ON "session" USING btree ("user_id");
 CREATE INDEX "account_user_id_idx" ON "account" USING btree ("user_id");
 CREATE UNIQUE INDEX "rate_limit_key_unique" ON "rate_limit" USING btree ("key");
+CREATE INDEX "rate_limit_last_request_idx" ON "rate_limit" USING btree ("last_request");

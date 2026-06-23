@@ -60,7 +60,10 @@ export const Api = HttpApi.make("CeirdApi").add(
     }),
     HttpApiEndpoint.get("me", "/me", {
       success: MeResponse,
-      error: HttpApiError.Unauthorized,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.InternalServerError,
+      ],
     }),
   ),
 );

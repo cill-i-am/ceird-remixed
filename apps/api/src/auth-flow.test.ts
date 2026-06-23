@@ -1,8 +1,9 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import * as Effect from "effect/Effect";
-import { Auth } from "./auth.ts";
-import { makeCorsPolicy } from "./cors.ts";
+import * as Layer from "effect/Layer";
+import { Auth, AuthSessionLookupFailed } from "./auth.ts";
+import { isAllowedCredentialedOrigin, makeCorsPolicy } from "./cors.ts";
 import { makeAuthFlowHarness } from "./test/auth-flow-harness.ts";
 
 test("Better Auth routes are dispatched before the Effect HttpApi router", async () => {
@@ -42,6 +43,7 @@ test("email/password sign-up and sign-in create Drizzle-backed sessions", async 
 
   assert.equal(signIn.status, 200);
   assert.match(readSetCookie(signIn), /better-auth\./);
+  assert.doesNotMatch(readSetCookie(signIn), /;\s*Secure/i);
 });
 
 test("email/password sign-up uses database-backed rate limiting", async () => {
@@ -57,6 +59,42 @@ test("email/password sign-up uses database-backed rate limiting", async () => {
 
   assert.equal(signUp.status, 200);
   assert.equal(await harness.rateLimitRowCount(), 1);
+});
+
+test("email/password sign-up keys rate limiting by Cloudflare client IP", async () => {
+  await using harness = await makeAuthFlowHarness();
+
+  const signUp = await harness.fetch(
+    jsonRequest("http://localhost/api/auth/sign-up/email", {
+      email: "cloudflare-ip@example.com",
+      password: "correct horse battery staple",
+      name: "Cloudflare IP",
+    }, {
+      "cf-connecting-ip": "203.0.113.10",
+      "x-forwarded-for": "198.51.100.20",
+    }),
+  );
+
+  assert.equal(signUp.status, 200);
+  const keys = await harness.rateLimitKeys();
+  assert.equal(keys.some((key) => key.includes("203.0.113.10")), true);
+  assert.equal(keys.some((key) => key.includes("198.51.100.20")), false);
+});
+
+test("secure cookie mode is explicit for deployed auth", async () => {
+  await using harness = await makeAuthFlowHarness({
+    authConfig: {
+      useSecureCookies: true,
+    },
+  });
+
+  const signInCookie = await harness.signUpAndReadCookie({
+    email: "secure-cookie@example.com",
+    password: "correct horse battery staple",
+    name: "Secure Cookie",
+  });
+
+  assert.match(signInCookie, /;\s*Secure/i);
 });
 
 test("GET /me requires a valid Better Auth session and returns a typed principal", async () => {
@@ -105,6 +143,24 @@ test("Auth service parses Better Auth cookies into a Principal", async () => {
   assert.equal(principal.name, "Katherine Johnson");
 });
 
+test("GET /me maps auth infrastructure lookup failures to 500", async () => {
+  await using harness = await makeAuthFlowHarness({
+    authLive: Layer.succeed(Auth)({
+      requirePrincipal: () =>
+        Effect.fail(
+          AuthSessionLookupFailed.make({
+            message: "Synthetic lookup failure.",
+            cause: new Error("synthetic"),
+          }),
+        ),
+    }),
+  });
+
+  const response = await harness.fetch(new Request("http://localhost/me"));
+
+  assert.equal(response.status, 500);
+});
+
 test("credentialed CORS allows the app origin and omits credentials for untrusted origins", async () => {
   await using harness = await makeAuthFlowHarness();
 
@@ -136,6 +192,11 @@ test("credentialed CORS allows the app origin and omits credentials for untruste
   assert.equal(rejected.status, 204);
   assert.equal(rejected.headers.get("access-control-allow-origin"), null);
   assert.equal(rejected.headers.get("access-control-allow-credentials"), null);
+});
+
+test("default credentialed CORS policy rejects unconfigured localhost", () => {
+  assert.equal(isAllowedCredentialedOrigin("http://localhost:3000"), false);
+  assert.equal(isAllowedCredentialedOrigin("http://127.0.0.1:3000"), false);
 });
 
 test("credentialed CORS allows only explicit first-party app and local origins", async () => {
@@ -188,12 +249,17 @@ test("credentialed CORS can allow an exact configured preview app origin", async
   assert.equal(siblingPreview.headers.get("access-control-allow-origin"), null);
 });
 
-function jsonRequest(url: string, body: unknown) {
+function jsonRequest(
+  url: string,
+  body: unknown,
+  extraHeaders: Readonly<Record<string, string>> = {},
+) {
   return new Request(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       origin: "http://localhost:3000",
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   });

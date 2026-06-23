@@ -8,8 +8,14 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
-import { createAuth, makeAuthLive, type AuthInstance } from "../auth.ts";
-import type { CorsPolicy } from "../cors.ts";
+import {
+  Auth,
+  createAuth,
+  type AuthConfig,
+  makeAuthLive,
+  type AuthInstance,
+} from "../auth.ts";
+import { makeCorsPolicy, type CorsPolicy } from "../cors.ts";
 import { makeDbHealthLiveFromDb } from "../db.ts";
 import { makeHttpApiFetch } from "../http.ts";
 
@@ -31,11 +37,14 @@ export type AuthFlowHarness = AsyncDisposable & {
   readonly userIdByEmail: (email: string) => Promise<string>;
   readonly sessionCount: () => Promise<number>;
   readonly rateLimitRowCount: () => Promise<number>;
+  readonly rateLimitKeys: () => Promise<ReadonlyArray<string>>;
   readonly signUpAndReadCookie: (input: SignUpInput) => Promise<string>;
 };
 
 export async function makeAuthFlowHarness(options?: {
+  readonly authLive?: Layer.Layer<Auth>;
   readonly corsPolicy?: CorsPolicy;
+  readonly authConfig?: Partial<Omit<AuthConfig, "secret">>;
 }): Promise<AuthFlowHarness> {
   const client = new PGlite();
   await applyMigration(client);
@@ -44,18 +53,23 @@ export async function makeAuthFlowHarness(options?: {
     client,
     relations,
   });
-  const auth = createAuth(db, { secret: testSecret });
+  const auth = createAuth(db, {
+    secret: testSecret,
+    allowedHosts: ["localhost"],
+    trustedOrigins: ["http://localhost:3000"],
+    useSecureCookies: false,
+    ...options?.authConfig,
+  });
+  const corsPolicy =
+    options?.corsPolicy ??
+    makeCorsPolicy({ credentialedOrigins: ["http://localhost:3000"] });
   const api = makeHttpApiFetch(
-    options?.corsPolicy === undefined
-      ? {
-          auth,
-          dbHealthLive: makeDbHealthLiveFromDb(db),
-        }
-      : {
-          auth,
-          dbHealthLive: makeDbHealthLiveFromDb(db),
-          corsPolicy: options.corsPolicy,
-        },
+    {
+      auth,
+      ...(options?.authLive === undefined ? {} : { authLive: options.authLive }),
+      dbHealthLive: makeDbHealthLiveFromDb(db),
+      corsPolicy,
+    },
   );
   let disposed = false;
 
@@ -98,8 +112,17 @@ export async function makeAuthFlowHarness(options?: {
 
       return rows[0]?.count ?? 0;
     },
+    rateLimitKeys: async () => {
+      const rows = await db.select({ key: schema.rateLimit.key }).from(
+        schema.rateLimit,
+      );
+
+      return rows.map((row) => row.key);
+    },
     signUpAndReadCookie: async (input) => {
-      const response = await api.fetch(jsonRequest("/api/auth/sign-up/email", input));
+      const response = await api.fetch(
+        jsonRequest("/api/auth/sign-up/email", input),
+      );
 
       if (response.status !== 200) {
         throw new Error(`Expected sign-up to pass, got ${response.status}.`);

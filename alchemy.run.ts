@@ -7,14 +7,12 @@ import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import { makeStageAuthConfig } from "./apps/api/src/auth-config.ts";
 import ApiWorker from "./apps/api/src/worker.ts";
 import { LocalServiceOriginSchema } from "./scripts/local-dev/topology.ts";
 
 const repositoryOwner = "cill-i-am";
 const repositoryName = "ceird-remixed";
-const productionApiHostname = "api.ceird.app";
-const productionApiUrl = `https://${productionApiHostname}`;
-
 export default Alchemy.Stack(
   "ceird-remixed",
   {
@@ -27,6 +25,7 @@ export default Alchemy.Stack(
   },
   Effect.gen(function* () {
     const stage = yield* Alchemy.Stage;
+    const stageAuthConfig = makeStageAuthConfig(stage);
     const api = yield* ApiWorker;
     const alchemyContext = yield* Alchemy.AlchemyContext;
     const localOriginConfig = Config.all({
@@ -47,18 +46,18 @@ export default Alchemy.Stack(
     const apiUrl =
       hasLocalOrigins
         ? localOrigins.value.api.href
-        : stage === "prod"
-          ? productionApiUrl
-          : api.url.as<string>();
+        : stageAuthConfig.apiOrigin;
 
-    if (stage === "prod") {
-      const zone = yield* Cloudflare.Zone("CeirdZone", {
+    const zone = hasLocalOrigins
+      ? undefined
+      : yield* Cloudflare.Zone("CeirdZone", {
         name: "ceird.app",
       }).pipe(Alchemy.AdoptPolicy.adopt(true));
 
+    if (zone !== undefined) {
       yield* Cloudflare.WorkerRoute("ApiRoute", {
         zoneId: zone.zoneId,
-        pattern: `${productionApiHostname}/*`,
+        pattern: `${stageAuthConfig.apiHost}/*`,
         script: api.workerName,
       }).pipe(Alchemy.AdoptPolicy.adopt(true));
     }
@@ -77,7 +76,15 @@ export default Alchemy.Stack(
     const appUrl =
       hasLocalOrigins
         ? localOrigins.value.app.href
-        : app.url.as<string>();
+        : stageAuthConfig.appOrigin;
+
+    if (zone !== undefined) {
+      yield* Cloudflare.WorkerRoute("AppRoute", {
+        zoneId: zone.zoneId,
+        pattern: `${stageAuthConfig.appHost}/*`,
+        script: app.workerName,
+      }).pipe(Alchemy.AdoptPolicy.adopt(true));
+    }
     const pullRequest = yield* Config.string("PULL_REQUEST").pipe(
       Config.withDefault(""),
     );

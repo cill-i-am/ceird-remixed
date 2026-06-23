@@ -1,4 +1,33 @@
 const wildcardPattern = /[*?[\]{}()]/u;
+const productionAppOrigin = "https://app.ceird.app";
+const productionApiHost = "api.ceird.app";
+
+export type StageAuthConfig = {
+  readonly apiHost: string;
+  readonly apiOrigin: string;
+  readonly appHost: string;
+  readonly appOrigin: string;
+};
+
+export function makeStageAuthConfig(stage: string): StageAuthConfig {
+  if (stage === "prod") {
+    return {
+      apiHost: productionApiHost,
+      apiOrigin: `https://${productionApiHost}`,
+      appHost: "app.ceird.app",
+      appOrigin: productionAppOrigin,
+    };
+  }
+
+  const segment = makeStageHostSegment(stage);
+
+  return {
+    apiHost: `api-${segment}.ceird.app`,
+    apiOrigin: `https://api-${segment}.ceird.app`,
+    appHost: `app-${segment}.ceird.app`,
+    appOrigin: `https://app-${segment}.ceird.app`,
+  };
+}
 
 export function parseOriginList(input: string | undefined): ReadonlyArray<string> {
   return splitConfigList(input).map((origin) => {
@@ -62,4 +91,16 @@ function splitConfigList(input: string | undefined): ReadonlyArray<string> {
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
+}
+
+function makeStageHostSegment(stage: string) {
+  const segment = stage
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+/, "")
+    .replace(/-+$/, "")
+    .slice(0, 48)
+    .replace(/-+$/, "");
+
+  return segment.length === 0 ? "local" : segment;
 }

@@ -86,7 +86,10 @@ export const rateLimit = pgTable(
     count: integer("count").notNull(),
     lastRequest: bigint("last_request", { mode: "number" }).notNull(),
   },
-  (table) => [uniqueIndex("rate_limit_key_unique").on(table.key)],
+  (table) => [
+    uniqueIndex("rate_limit_key_unique").on(table.key),
+    index("rate_limit_last_request_idx").on(table.lastRequest),
+  ],
 );
 
 export const schema = {

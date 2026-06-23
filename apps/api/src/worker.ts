@@ -1,10 +1,20 @@
+import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
+import { WorkerExecutionContext } from "alchemy/Cloudflare/Workers";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as HttpEffect from "effect/unstable/http/HttpEffect";
-import { parseHostList, parseOriginList } from "./auth-config.ts";
+import {
+  makeStageAuthConfig,
+  parseHostList,
+  parseOriginList,
+} from "./auth-config.ts";
 import { createAuth } from "./auth.ts";
+import {
+  runAuthBackgroundTask,
+  runWithBackgroundTaskContext,
+} from "./background-tasks.ts";
 import { makeCorsPolicy } from "./cors.ts";
 import { makeApiDb, makeDbHealthLiveFromDb } from "./db.ts";
 import { ApiHyperdrive } from "./db-infra.ts";
@@ -28,6 +38,8 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
   },
   Effect.gen(function* () {
     const hyperdrive = yield* Cloudflare.Hyperdrive.bind(ApiHyperdrive);
+    const stage = yield* Alchemy.Stage;
+    const stageAuthConfig = makeStageAuthConfig(stage);
     const authSecret = yield* Config.redacted("BETTER_AUTH_SECRET");
     const configuredTrustedOrigins = yield* Config.string(
       "CEIRD_AUTH_TRUSTED_ORIGINS",
@@ -35,11 +47,15 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
     const configuredAllowedHosts = yield* Config.string(
       "CEIRD_AUTH_ALLOWED_HOSTS",
     ).pipe(Config.option);
-    const trustedOrigins = parseOriginList(
-      Option.getOrUndefined(configuredTrustedOrigins),
-    );
-    const allowedHosts = parseHostList(
-      Option.getOrUndefined(configuredAllowedHosts),
+    const trustedOrigins = unique([
+      stageAuthConfig.appOrigin,
+      ...parseOriginList(Option.getOrUndefined(configuredTrustedOrigins)),
+    ]);
+    const allowedHosts = unique(
+      [
+        stageAuthConfig.apiHost,
+        ...parseHostList(Option.getOrUndefined(configuredAllowedHosts)),
+      ].map((host) => host.toLowerCase()),
     );
     const corsPolicy = makeCorsPolicy({
       credentialedOrigins: trustedOrigins,
@@ -52,6 +68,8 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
           secret: authSecret,
           trustedOrigins,
           allowedHosts,
+          useSecureCookies: true,
+          backgroundTaskHandler: runAuthBackgroundTask,
         });
 
         return makeHttpApiFetch({
@@ -64,10 +82,20 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
 
     return {
       fetch: Effect.gen(function* () {
+        const executionContext = yield* WorkerExecutionContext;
         const api = yield* runtime;
 
-        return yield* HttpEffect.fromWebHandler(api.fetch);
+        return yield* HttpEffect.fromWebHandler((request) =>
+          runWithBackgroundTaskContext(
+            { waitUntil: (promise) => executionContext.waitUntil(promise) },
+            () => api.fetch(request),
+          )
+        );
       }),
     };
   }).pipe(Effect.provide(Cloudflare.HyperdriveBindingLive)),
 ) {}
+
+function unique(values: ReadonlyArray<string>): ReadonlyArray<string> {
+  return [...new Set(values)];
+}

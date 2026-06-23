@@ -68,6 +68,8 @@ export type AuthConfig = {
   readonly secret: Redacted.Redacted<string>;
   readonly allowedHosts?: ReadonlyArray<string>;
   readonly trustedOrigins?: ReadonlyArray<string>;
+  readonly useSecureCookies: boolean;
+  readonly backgroundTaskHandler?: (promise: Promise<unknown>) => void;
 };
 
 export class Auth extends Context.Service<
@@ -85,7 +87,10 @@ const BetterAuthSessionSchema = Schema.Struct({
 
 const decodeSession = Schema.decodeUnknownEffect(BetterAuthSessionSchema);
 
-export function createAuth(database: Parameters<typeof drizzleAdapter>[0], config: AuthConfig) {
+export function createAuth(
+  database: Parameters<typeof drizzleAdapter>[0],
+  config: AuthConfig,
+) {
   const allowedHosts = [
     ...betterAuthAllowedHosts,
     ...(config.allowedHosts ?? []),
@@ -117,6 +122,19 @@ export function createAuth(database: Parameters<typeof drizzleAdapter>[0], confi
     },
     trustedOrigins,
     secret: Redacted.value(config.secret),
+    advanced: {
+      useSecureCookies: config.useSecureCookies,
+      ipAddress: {
+        ipAddressHeaders: ["cf-connecting-ip"],
+      },
+      ...(config.backgroundTaskHandler === undefined
+        ? {}
+        : {
+            backgroundTasks: {
+              handler: config.backgroundTaskHandler,
+            },
+          }),
+    },
     rateLimit: {
       enabled: true,
       storage: "database",
@@ -132,6 +150,12 @@ export type AuthInstance = ReturnType<typeof createAuth>;
 export const makeAuthLive = (auth: AuthInstance) =>
   Layer.succeed(Auth)({
     requirePrincipal: Effect.fn("Auth.requirePrincipal")(function* (headers) {
+      if (!hasBetterAuthSessionCookie(headers)) {
+        return yield* Effect.fail(
+          Unauthenticated.make({ reason: "missing-session" }),
+        );
+      }
+
       const sessionResult = yield* Effect.tryPromise({
         try: () => auth.api.getSession({ headers }),
         catch: (cause) =>
@@ -162,4 +186,19 @@ export const makeAuthLive = (auth: AuthInstance) =>
 
 export function principalUserId(principal: Principal): UserId {
   return principal.id;
+}
+
+function hasBetterAuthSessionCookie(headers: Headers) {
+  const cookieHeader = headers.get("cookie");
+
+  if (cookieHeader === null) {
+    return false;
+  }
+
+  return cookieHeader
+    .split(";")
+    .some((cookie) =>
+      cookie.trim().split("=", 1)[0]?.endsWith("better-auth.session_token") ??
+      false,
+    );
 }

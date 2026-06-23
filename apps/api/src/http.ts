@@ -66,11 +66,27 @@ const handlers = HttpApiBuilder.group(Api, "Meta", (group) =>
                 "Unauthenticated",
                 () => Effect.fail(new HttpApiError.Unauthorized({})),
               ),
-              Effect.catchTag("AuthSessionLookupFailed", () =>
-                Effect.fail(new HttpApiError.Unauthorized({})),
+              Effect.catchTag("AuthSessionLookupFailed", (error) =>
+                Effect.logWarning(
+                  "Authenticated principal lookup failed.",
+                  "error:",
+                  error._tag,
+                ).pipe(
+                  Effect.andThen(() =>
+                    Effect.fail(new HttpApiError.InternalServerError({})),
+                  ),
+                ),
               ),
-              Effect.catchTag("AuthSessionParseFailed", () =>
-                Effect.fail(new HttpApiError.Unauthorized({})),
+              Effect.catchTag("AuthSessionParseFailed", (error) =>
+                Effect.logWarning(
+                  "Authenticated principal parse failed.",
+                  "error:",
+                  error._tag,
+                ).pipe(
+                  Effect.andThen(() =>
+                    Effect.fail(new HttpApiError.InternalServerError({})),
+                  ),
+                ),
               ),
             );
 
@@ -106,30 +122,26 @@ export function makeHttpApiLayer(options: {
 
 export function makeHttpApiFetch(options: {
   readonly auth: AuthInstance;
+  readonly authLive?: Layer.Layer<Auth>;
   readonly dbHealthLive: Layer.Layer<DbHealth>;
   readonly corsPolicy?: CorsPolicy;
 }) {
   const { handler, dispose } = HttpRouter.toWebHandler(
     makeHttpApiLayer({
-      authLive: makeAuthLive(options.auth),
+      authLive: options.authLive ?? makeAuthLive(options.auth),
       dbHealthLive: options.dbHealthLive,
     }),
     { disableLogger: true },
   );
 
   return {
-    fetch: makeApiFetch(
-      options.corsPolicy === undefined
-        ? {
-            auth: options.auth,
-            apiFetch: handler,
-          }
-        : {
-            auth: options.auth,
-            apiFetch: handler,
-            corsPolicy: options.corsPolicy,
-          },
-    ),
+    fetch: makeApiFetch({
+      auth: options.auth,
+      apiFetch: (request) => handler(request),
+      ...(options.corsPolicy === undefined
+        ? {}
+        : { corsPolicy: options.corsPolicy }),
+    }),
     dispose,
   };
 }

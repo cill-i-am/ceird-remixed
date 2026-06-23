@@ -10,21 +10,13 @@ const allowedHeaders = [
   "x-b3-traceid",
 ].join(",");
 
-const localHostnames = new Set(["localhost", "127.0.0.1"]);
-
 export const betterAuthAllowedHosts = [
   "api.ceird.app",
   "remixed-api.ceird.app",
-  "localhost",
-  "localhost:*",
-  "127.0.0.1",
-  "127.0.0.1:*",
 ] as const;
 
 export const betterAuthTrustedOrigins = [
   "https://app.ceird.app",
-  "http://localhost:*",
-  "http://127.0.0.1:*",
 ] as const;
 
 export type CorsPolicy = {
@@ -52,11 +44,7 @@ export function isAllowedCredentialedOrigin(
     return false;
   }
 
-  if (parsed.protocol === "http:" && localHostnames.has(parsed.hostname)) {
-    return true;
-  }
-
-  if (parsed.protocol !== "https:") {
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     return false;
   }
 
