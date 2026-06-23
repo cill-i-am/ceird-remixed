@@ -1,5 +1,6 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
+import * as Drizzle from "alchemy/Drizzle";
 import * as GitHub from "alchemy/GitHub";
 import * as Neon from "alchemy/Neon";
 import * as Output from "alchemy/Output";
@@ -12,7 +13,7 @@ import { LocalServiceOriginSchema } from "./scripts/local-dev/topology.ts";
 
 const repositoryOwner = "cill-i-am";
 const repositoryName = "ceird-remixed";
-const productionApiHostname = "remixed-api.ceird.app";
+const productionApiHostname = "api.ceird.app";
 const productionApiUrl = `https://${productionApiHostname}`;
 
 export default Alchemy.Stack(
@@ -20,6 +21,7 @@ export default Alchemy.Stack(
   {
     providers: Layer.mergeAll(
       Cloudflare.providers(),
+      Drizzle.providers(),
       GitHub.providers(),
       Neon.providers(),
     ),

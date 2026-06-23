@@ -1,30 +1,15 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
-import { RuntimeContext, type BaseRuntimeContext } from "alchemy";
-import * as Cloudflare from "alchemy/Cloudflare";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import * as Redacted from "effect/Redacted";
 import {
   DbHealth,
   DbHealthCheckFailed,
   makeDbHealthLive,
 } from "./db-health.ts";
 
-const runtimeContext: BaseRuntimeContext = {
-  Type: "TestRuntime",
-  id: "test-runtime",
-  env: {},
-  get: () => Effect.succeed(undefined),
-  set: (id: string) => Effect.succeed(id),
-};
-
 test("DbHealth returns redacted-safe provider metadata when the probe succeeds", async () => {
-  const result = await Effect.runPromise(
-    checkDbHealth([{ ok: 1 }]).pipe(
-      Effect.provideService(RuntimeContext, runtimeContext),
-    ),
-  );
+  const result = await Effect.runPromise(checkDbHealth([{ ok: 1 }]));
 
   assert.equal(result.ok, true);
   assert.equal(result.service, "ceird-api");
@@ -35,11 +20,7 @@ test("DbHealth returns redacted-safe provider metadata when the probe succeeds",
 });
 
 test("DbHealth fails when the probe result is unexpected", async () => {
-  const exit = await Effect.runPromiseExit(
-    checkDbHealth([{ ok: 0 }]).pipe(
-      Effect.provideService(RuntimeContext, runtimeContext),
-    ),
-  );
+  const exit = await Effect.runPromiseExit(checkDbHealth([{ ok: 0 }]));
 
   assert.equal(Exit.isFailure(exit), true);
   if (Exit.isFailure(exit)) {
@@ -58,27 +39,9 @@ function checkDbHealth(rows: ReadonlyArray<{ readonly ok: number }>) {
     return yield* dbHealth.check();
   }).pipe(
     Effect.provide(
-      makeDbHealthLive(makeHyperdriveBinding(), {
-        makeClient: () => ({
-          connect: () => Promise.resolve(),
-          queryHealth: () => Promise.resolve({ rows }),
-          end: () => Promise.resolve(),
-        }),
+      makeDbHealthLive({
+        queryHealth: () => Promise.resolve(rows),
       }),
     ),
   );
-}
-
-function makeHyperdriveBinding(): Cloudflare.HyperdriveBindingClient {
-  return {
-    raw: Effect.die("unused raw Hyperdrive binding"),
-    connectionString: Effect.succeed(
-      Redacted.make("postgres://user:pass@example.invalid:5432/db"),
-    ),
-    host: Effect.succeed("example.invalid"),
-    port: Effect.succeed(5432),
-    user: Effect.succeed("user"),
-    password: Effect.succeed(Redacted.make("pass")),
-    database: Effect.succeed("db"),
-  };
 }

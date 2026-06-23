@@ -32,6 +32,16 @@ export class DbHealthResponse extends Schema.Class<DbHealthResponse>(
   }),
 }) {}
 
+export const UserIdSchema = Schema.String.pipe(Schema.brand("UserId"));
+export type UserId = typeof UserIdSchema.Type;
+
+/** Authenticated first-party principal view. */
+export class MeResponse extends Schema.Class<MeResponse>("MeResponse")({
+  id: UserIdSchema,
+  email: Schema.String,
+  name: Schema.String,
+}) {}
+
 /** Public HTTP contract for the Ceird API. */
 export const Api = HttpApi.make("CeirdApi").add(
   HttpApiGroup.make("Meta").add(
@@ -47,6 +57,10 @@ export const Api = HttpApi.make("CeirdApi").add(
     }),
     HttpApiEndpoint.get("hello", "/hello", {
       success: HelloResponse,
+    }),
+    HttpApiEndpoint.get("me", "/me", {
+      success: MeResponse,
+      error: HttpApiError.Unauthorized,
     }),
   ),
 );

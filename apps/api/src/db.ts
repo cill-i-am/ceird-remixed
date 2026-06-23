@@ -1,0 +1,60 @@
+import { relations } from "@ceird/db/relations";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { sql, type SQL } from "drizzle-orm";
+import * as Redacted from "effect/Redacted";
+import type { Pool } from "pg";
+import { makeDbHealthLive, type HealthProbeRow } from "./db-health.ts";
+
+export type ApiDb = NodePgDatabase<typeof relations> & {
+  readonly $client: Pool;
+};
+
+export function makeApiDb(
+  connectionString: Redacted.Redacted<string>,
+): ApiDb {
+  return drizzle({
+    connection: {
+      connectionString: Redacted.value(connectionString),
+      max: 5,
+      connectionTimeoutMillis: 3_000,
+      idleTimeoutMillis: 10_000,
+    },
+    relations,
+  });
+}
+
+type DrizzleHealthDb<TResult> = {
+  readonly execute: (query: SQL<HealthProbeRow>) => TResult;
+};
+
+export const makeDbHealthLiveFromDb = <TResult>(
+  db: DrizzleHealthDb<TResult>,
+) =>
+  makeDbHealthLive({
+    queryHealth: async () =>
+      normalizeHealthProbeRows(
+        await db.execute(sql<HealthProbeRow>`select 1 as ok`),
+      ),
+  });
+
+function normalizeHealthProbeRows(result: unknown): ReadonlyArray<HealthProbeRow> {
+  if (Array.isArray(result)) {
+    return result.filter(isHealthProbeRow);
+  }
+
+  if (typeof result !== "object" || result === null) {
+    return [];
+  }
+
+  const rows = Object.getOwnPropertyDescriptor(result, "rows")?.value;
+
+  return Array.isArray(rows) ? rows.filter(isHealthProbeRow) : [];
+}
+
+function isHealthProbeRow(value: unknown): value is HealthProbeRow {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  return Object.getOwnPropertyDescriptor(value, "ok")?.value === 1;
+}

@@ -1,54 +1,13 @@
 import * as Cloudflare from "alchemy/Cloudflare";
+import * as Alchemy from "alchemy";
+import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as HttpApiError from "effect/unstable/httpapi/HttpApiError";
-import * as Etag from "effect/unstable/http/Etag";
-import * as HttpPlatform from "effect/unstable/http/HttpPlatform";
-import * as HttpRouter from "effect/unstable/http/HttpRouter";
-import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
-import { Api, HealthResponse, HelloResponse } from "@ceird/api-contract";
-import { DbHealth, makeDbHealthLive } from "./db-health.ts";
+import * as Option from "effect/Option";
+import * as HttpEffect from "effect/unstable/http/HttpEffect";
+import { createAuth } from "./auth.ts";
+import { makeApiDb, makeDbHealthLiveFromDb } from "./db.ts";
 import { ApiHyperdrive } from "./db-infra.ts";
-
-const helloResponse = HelloResponse.make({
-  ok: true,
-  message: "Hello from an Effect HttpApi on Cloudflare Workers.",
-  stage: "dummy",
-});
-
-const handlers = HttpApiBuilder.group(Api, "Meta", (group) =>
-  Effect.gen(function* () {
-    const dbHealth = yield* DbHealth;
-
-    return group
-      .handle("health", () =>
-        Effect.succeed(
-          HealthResponse.make({
-            ok: true,
-            service: "ceird-api",
-            status: "healthy",
-          }),
-        ),
-      )
-      .handle("dbHealth", () =>
-        dbHealth.check().pipe(
-          Effect.tapError((error) =>
-            Effect.logWarning(
-              "Database health check failed.",
-              "operation:",
-              error.operation,
-            ),
-          ),
-          Effect.catchTag(
-            "DbHealthCheckFailed",
-            () => Effect.fail(new HttpApiError.ServiceUnavailable({})),
-          ),
-        ),
-      )
-      .handle("root", () => Effect.succeed(helloResponse))
-      .handle("hello", () => Effect.succeed(helloResponse));
-  }),
-);
+import { makeHttpApiFetch } from "./http.ts";
 
 export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
   "Api",
@@ -67,32 +26,39 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
     },
   },
   Effect.gen(function* () {
+    const stage = yield* Alchemy.Stage;
     const hyperdrive = yield* Cloudflare.Hyperdrive.bind(ApiHyperdrive);
-    const dbHealthLive = makeDbHealthLive(hyperdrive);
+    const authSecret = yield* Config.redacted("BETTER_AUTH_SECRET");
+    const authCookieDomainOverride = yield* Config.string(
+      "CEIRD_AUTH_COOKIE_DOMAIN",
+    ).pipe(Config.option);
+    const authCookieDomain = stage === "prod"
+      ? Option.some("ceird.app")
+      : authCookieDomainOverride;
+    const runtime = yield* Effect.cached(
+      Effect.gen(function* () {
+        const connectionString = yield* hyperdrive.connectionString;
+        const db = makeApiDb(connectionString);
+        const auth = createAuth(db, {
+          secret: authSecret,
+          ...(Option.isSome(authCookieDomain)
+            ? { cookieDomain: authCookieDomain.value }
+            : {}),
+        });
+
+        return makeHttpApiFetch({
+          auth,
+          dbHealthLive: makeDbHealthLiveFromDb(db),
+        });
+      }),
+    );
 
     return {
-      fetch: HttpApiBuilder.layer(Api).pipe(
-        Layer.provide(handlers),
-        Layer.provide(dbHealthLive),
-        Layer.provide([HttpPlatform.layer, Etag.layer]),
-        Layer.provide(
-          HttpRouter.cors({
-            allowedHeaders: [
-              "Accept",
-              "Authorization",
-              "Content-Type",
-              "b3",
-              "traceparent",
-              "x-b3-sampled",
-              "x-b3-spanid",
-              "x-b3-traceid",
-            ],
-            allowedMethods: ["GET", "OPTIONS"],
-            allowedOrigins: ["*"],
-          }),
-        ),
-        HttpRouter.toHttpEffect,
-      ),
+      fetch: Effect.gen(function* () {
+        const api = yield* runtime;
+
+        return yield* HttpEffect.fromWebHandler(api.fetch);
+      }),
     };
   }).pipe(Effect.provide(Cloudflare.HyperdriveBindingLive)),
 ) {}
