@@ -1,4 +1,10 @@
-import { account, session, user, verification } from "@ceird/db/schema";
+import {
+  account,
+  rateLimit,
+  session,
+  user,
+  verification,
+} from "@ceird/db/schema";
 import {
   MeResponse,
   UserIdSchema,
@@ -60,7 +66,6 @@ export type AuthError =
 
 export type AuthConfig = {
   readonly secret: Redacted.Redacted<string>;
-  readonly cookieDomain?: string;
   readonly allowedHosts?: ReadonlyArray<string>;
   readonly trustedOrigins?: ReadonlyArray<string>;
 };
@@ -81,7 +86,6 @@ const BetterAuthSessionSchema = Schema.Struct({
 const decodeSession = Schema.decodeUnknownEffect(BetterAuthSessionSchema);
 
 export function createAuth(database: Parameters<typeof drizzleAdapter>[0], config: AuthConfig) {
-  const baseProtocol = config.cookieDomain === undefined ? "auto" : "https";
   const allowedHosts = [
     ...betterAuthAllowedHosts,
     ...(config.allowedHosts ?? []),
@@ -96,7 +100,7 @@ export function createAuth(database: Parameters<typeof drizzleAdapter>[0], confi
     basePath: "/api/auth",
     baseURL: {
       allowedHosts,
-      protocol: baseProtocol,
+      protocol: "auto",
     },
     database: drizzleAdapter(database, {
       provider: "pg",
@@ -105,6 +109,7 @@ export function createAuth(database: Parameters<typeof drizzleAdapter>[0], confi
         session,
         account,
         verification,
+        rateLimit,
       },
     }),
     emailAndPassword: {
@@ -112,16 +117,9 @@ export function createAuth(database: Parameters<typeof drizzleAdapter>[0], confi
     },
     trustedOrigins,
     secret: Redacted.value(config.secret),
-    // TODO(auth-hardening): Better Auth's default rate limit storage is
-    // per-isolate memory. Configure shared storage before treating rate limits
-    // as globally reliable on Cloudflare.
-    advanced: {
-      crossSubDomainCookies: {
-        enabled: config.cookieDomain !== undefined,
-        ...(config.cookieDomain === undefined
-          ? {}
-          : { domain: config.cookieDomain }),
-      },
+    rateLimit: {
+      enabled: true,
+      storage: "database",
     },
     logger: {
       disabled: true,

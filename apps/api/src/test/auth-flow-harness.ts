@@ -30,6 +30,7 @@ export type AuthFlowHarness = AsyncDisposable & {
   readonly userCountByEmail: (email: string) => Promise<number>;
   readonly userIdByEmail: (email: string) => Promise<string>;
   readonly sessionCount: () => Promise<number>;
+  readonly rateLimitRowCount: () => Promise<number>;
   readonly signUpAndReadCookie: (input: SignUpInput) => Promise<string>;
 };
 
@@ -87,6 +88,13 @@ export async function makeAuthFlowHarness(options?: {
       const rows = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.session);
+
+      return rows[0]?.count ?? 0;
+    },
+    rateLimitRowCount: async () => {
+      const rows = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.rateLimit);
 
       return rows[0]?.count ?? 0;
     },

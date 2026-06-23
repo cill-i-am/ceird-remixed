@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  makeLocalDevEnv,
   makeDefaultLocalAlchemyStage,
   makeLocalDevTopology,
   parseLocalServiceOrigin,
@@ -21,15 +22,12 @@ test("builds stable service origins from branch-like stage input", () => {
     "https://api.codex-portless-local-dev.ceird.localhost/",
   );
   assert.equal(
-    topology.authCookieDomain,
-    "codex-portless-local-dev.ceird.localhost",
+    topology.authAllowedHosts,
+    "api.codex-portless-local-dev.ceird.localhost",
   );
   assert.equal(
-    topology.trustedOrigins,
-    [
-      "https://app.codex-portless-local-dev.ceird.localhost",
-      "https://api.codex-portless-local-dev.ceird.localhost",
-    ].join(","),
+    topology.authTrustedOrigins,
+    "https://app.codex-portless-local-dev.ceird.localhost",
   );
 });
 
@@ -51,11 +49,31 @@ test("includes the proxy port when portless is not running on 443", () => {
     "https://app.dev-cillian.ceird.localhost:1355/",
   );
   assert.equal(
-    topology.trustedOrigins,
-    [
-      "https://app.dev-cillian.ceird.localhost:1355",
-      "https://api.dev-cillian.ceird.localhost:1355",
-    ].join(","),
+    topology.authTrustedOrigins,
+    "https://app.dev-cillian.ceird.localhost:1355",
+  );
+  assert.equal(
+    topology.authAllowedHosts,
+    "api.dev-cillian.ceird.localhost:1355",
+  );
+});
+
+test("local dev env populates the Worker auth config names", () => {
+  const topology = makeLocalDevTopology("dev_cillian", { proxyPort: 1355 });
+  const env = makeLocalDevEnv(topology, {});
+
+  assert.equal(env.CEIRD_AUTH_COOKIE_DOMAIN, undefined);
+  assert.equal(
+    env.CEIRD_AUTH_TRUSTED_ORIGINS,
+    "https://app.dev-cillian.ceird.localhost:1355",
+  );
+  assert.equal(
+    env.CEIRD_AUTH_ALLOWED_HOSTS,
+    "api.dev-cillian.ceird.localhost:1355",
+  );
+  assert.equal(
+    env.BETTER_AUTH_SECRET,
+    "local-dev-secret-at-least-thirty-two-characters",
   );
 });
 

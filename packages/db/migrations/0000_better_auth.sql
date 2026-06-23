@@ -48,7 +48,15 @@ CREATE TABLE "verification" (
   "updated_at" timestamp DEFAULT now()
 );
 
+CREATE TABLE "rate_limit" (
+  "id" text PRIMARY KEY NOT NULL,
+  "key" text NOT NULL,
+  "count" integer NOT NULL,
+  "last_request" bigint NOT NULL
+);
+
 CREATE UNIQUE INDEX "user_email_unique" ON "user" USING btree ("email");
 CREATE UNIQUE INDEX "session_token_unique" ON "session" USING btree ("token");
 CREATE INDEX "session_user_id_idx" ON "session" USING btree ("user_id");
 CREATE INDEX "account_user_id_idx" ON "account" USING btree ("user_id");
+CREATE UNIQUE INDEX "rate_limit_key_unique" ON "rate_limit" USING btree ("key");

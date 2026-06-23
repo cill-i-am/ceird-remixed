@@ -118,8 +118,8 @@ export type LocalDevTopology = {
   readonly stage: LocalAlchemyStage;
   readonly stageHostSegment: LocalHostSegment;
   readonly proxyPort: LocalTargetPort | undefined;
-  readonly authCookieDomain: string;
-  readonly trustedOrigins: string;
+  readonly authAllowedHosts: string;
+  readonly authTrustedOrigins: string;
   readonly app: LocalHttpService;
   readonly api: LocalHttpService;
 };
@@ -284,8 +284,8 @@ export function makeLocalDevTopology(
     stage,
     stageHostSegment,
     proxyPort,
-    authCookieDomain: `${stageHostSegment}.${localHostBaseName}.${localTld}`,
-    trustedOrigins: [appOrigin.origin, apiOrigin.origin].join(","),
+    authAllowedHosts: apiOrigin.host,
+    authTrustedOrigins: appOrigin.origin,
     app: {
       name: "app",
       alias: appAlias,
@@ -300,5 +300,27 @@ export function makeLocalDevTopology(
       originEnvVar: "CEIRD_LOCAL_API_ORIGIN",
       targetOutputKey: parseAlchemyLocalTargetOutputKey("localApiTargetUrl"),
     },
+  };
+}
+
+/** Build environment variables consumed by local Alchemy/dev Worker runs. */
+export function makeLocalDevEnv(
+  topology: LocalDevTopology,
+  baseEnv: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  return {
+    ...baseEnv,
+    ALCHEMY_NO_TUI: baseEnv.ALCHEMY_NO_TUI ?? "1",
+    BETTER_AUTH_SECRET:
+      baseEnv.BETTER_AUTH_SECRET ??
+      "local-dev-secret-at-least-thirty-two-characters",
+    CEIRD_LOCAL_APP_ORIGIN: topology.app.origin.href,
+    CEIRD_LOCAL_API_ORIGIN: topology.api.origin.href,
+    CEIRD_LOCAL_AUTH_BASE_URL: `${topology.api.origin.origin}/api/auth`,
+    CEIRD_AUTH_ALLOWED_HOSTS: topology.authAllowedHosts,
+    CEIRD_AUTH_TRUSTED_ORIGINS: topology.authTrustedOrigins,
+    NODE_EXTRA_CA_CERTS:
+      baseEnv.NODE_EXTRA_CA_CERTS ??
+      `${baseEnv.HOME ?? ""}/.portless/ca.pem`,
   };
 }

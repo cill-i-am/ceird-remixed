@@ -26,6 +26,7 @@ import {
 } from "./local-dev/processes.ts";
 import {
   makeDefaultLocalAlchemyStage,
+  makeLocalDevEnv,
   makeLocalDevTopology,
   normalizeLocalAlchemyStage,
   type LocalAlchemyStage,
@@ -313,20 +314,6 @@ function findService(
   target: AlchemyLocalTarget,
 ): LocalHttpService {
   return target.serviceName === "app" ? topology.app : topology.api;
-}
-
-function makeLocalDevEnv(topology: LocalDevTopology): NodeJS.ProcessEnv {
-  return {
-    ...env,
-    ALCHEMY_NO_TUI: env.ALCHEMY_NO_TUI ?? "1",
-    CEIRD_LOCAL_APP_ORIGIN: topology.app.origin.href,
-    CEIRD_LOCAL_API_ORIGIN: topology.api.origin.href,
-    CEIRD_LOCAL_AUTH_BASE_URL: `${topology.api.origin.origin}/api/auth`,
-    CEIRD_LOCAL_AUTH_COOKIE_DOMAIN: topology.authCookieDomain,
-    CEIRD_LOCAL_TRUSTED_ORIGINS: topology.trustedOrigins,
-    NODE_EXTRA_CA_CERTS:
-      env.NODE_EXTRA_CA_CERTS ?? `${env.HOME ?? ""}/.portless/ca.pem`,
-  };
 }
 
 function makeAlchemyArgs(

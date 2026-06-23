@@ -44,6 +44,21 @@ test("email/password sign-up and sign-in create Drizzle-backed sessions", async 
   assert.match(readSetCookie(signIn), /better-auth\./);
 });
 
+test("email/password sign-up uses database-backed rate limiting", async () => {
+  await using harness = await makeAuthFlowHarness();
+
+  const signUp = await harness.fetch(
+    jsonRequest("http://localhost/api/auth/sign-up/email", {
+      email: "rate-limited@example.com",
+      password: "correct horse battery staple",
+      name: "Rate Limited",
+    }),
+  );
+
+  assert.equal(signUp.status, 200);
+  assert.equal(await harness.rateLimitRowCount(), 1);
+});
+
 test("GET /me requires a valid Better Auth session and returns a typed principal", async () => {
   await using harness = await makeAuthFlowHarness();
 
