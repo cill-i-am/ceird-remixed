@@ -1,19 +1,18 @@
+import { Badge } from "@ceird/ui/components/badge";
 import type { ApiHealthStatus } from "./queries/meta-queries";
 
 /** Renders the current API health state. */
 export function HealthBadge({
   apiHealth,
 }: Readonly<{ apiHealth: ApiHealthStatus }>) {
-  const healthTone =
-    apiHealth._tag === "Healthy"
-      ? "border-[#19706b] text-[#145b57]"
-      : "border-[#b42c2c] text-[#8d2020]";
+  const variant = apiHealth._tag === "Healthy" ? "default" : "destructive";
   const apiHealthLabel =
     apiHealth._tag === "Healthy" ? `API ${apiHealth.status}` : "API unhealthy";
 
   return (
-    <div
-      className={`inline-flex min-h-11 items-center justify-center gap-2.5 rounded-lg border bg-white px-[18px] font-bold ${healthTone}`}
+    <Badge
+      variant={variant}
+      className="h-auto min-h-11 gap-2.5 rounded-lg px-[18px] py-2 text-sm font-bold"
       aria-live="polite"
     >
       <span
@@ -21,6 +20,6 @@ export function HealthBadge({
         aria-hidden="true"
       />
       <span>{apiHealthLabel}</span>
-    </div>
+    </Badge>
   );
 }

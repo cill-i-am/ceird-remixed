@@ -9,6 +9,17 @@ export default defineConfig({
       external: ["cloudflare:workers"],
     },
   },
+  optimizeDeps: {
+    exclude: [
+      "@base-ui/react",
+      "@base-ui/react/button",
+      "@base-ui/react/merge-props",
+      "@base-ui/react/use-render",
+    ],
+  },
+  resolve: {
+    dedupe: ["react", "react-dom"],
+  },
   server: {
     port: 3000,
   },

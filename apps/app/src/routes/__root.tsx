@@ -5,8 +5,8 @@ import {
   Scripts,
   createRootRouteWithContext,
 } from "@tanstack/react-router";
+import stylesheet from "@ceird/ui/globals.css?url";
 import type { ReactNode } from "react";
-import stylesheet from "../styles.css?url";
 
 export const Route = createRootRouteWithContext<{
   readonly queryClient: QueryClient;
@@ -43,7 +43,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       <head>
         <HeadContent />
       </head>
-      <body className="m-0 min-h-screen min-w-[320px] bg-[#f7f5ef] font-sans leading-normal text-[#18202b]">
+      <body className="m-0 min-h-screen min-w-[320px] bg-background font-sans leading-normal text-foreground antialiased">
         {children}
         <Scripts />
       </body>

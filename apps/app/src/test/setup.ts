@@ -1,2 +1,2 @@
 import "vitest-browser-react";
-import "../styles.css";
+import "@ceird/ui/globals.css";

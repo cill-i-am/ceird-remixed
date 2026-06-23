@@ -41,6 +41,15 @@ These instructions apply to `apps/*` and refine the repository root `AGENTS.md`.
 
 Browser API calls use the public API URL. TanStack Start SSR calls should use the app Worker's server-only service binding to the API Worker. Both transports must be hidden behind the typed API client so routes and components never choose transport directly.
 
+## Design System
+
+- Shared UI primitives live in `packages/ui` and are consumed as `@ceird/ui`.
+- The shared UI package is shadcn/Base UI-backed, not Radix-backed. Use Base UI composition APIs such as `render`, `nativeButton={false}` for non-button renders, and Base-specific Select, ToggleGroup, Slider, and Accordion semantics.
+- Add or update shadcn primitives through the app config so files route into the shared package: `pnpm dlx shadcn@latest add <component> -c apps/app`.
+- Keep generated primitives in `packages/ui/src/components/*`, shared UI utilities in `packages/ui/src/lib/*`, and global shadcn/Tailwind tokens in `packages/ui/src/styles/globals.css`.
+- App routes and feature components should use `@ceird/ui` primitives and semantic design tokens instead of hand-rolled status spans or raw color classes when a shared primitive exists.
+- Shared packages must keep source exports for local HMR and use `tsdown` for package builds so apps can consume package source during development without a prebuild step.
+
 ## Public Config And Alchemy Inputs
 
 - Prefer Alchemy stack wiring for app-to-app resource values. For example, a root stack may pass an API Worker URL into `Cloudflare.Vite` through a server-side env binding such as `env: { API_URL: api.url.as<string>() }`.
