@@ -2,6 +2,7 @@ import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import * as Effect from "effect/Effect";
 import { Auth } from "./auth.ts";
+import { makeCorsPolicy } from "./cors.ts";
 import { makeAuthFlowHarness } from "./test/auth-flow-harness.ts";
 
 test("Better Auth routes are dispatched before the Effect HttpApi router", async () => {
@@ -122,7 +123,7 @@ test("credentialed CORS allows the app origin and omits credentials for untruste
   assert.equal(rejected.headers.get("access-control-allow-credentials"), null);
 });
 
-test("credentialed CORS allows only first-party local/app/org origin shapes", async () => {
+test("credentialed CORS allows only explicit first-party app and local origins", async () => {
   await using harness = await makeAuthFlowHarness();
 
   const appOrigin = await preflightFrom(harness.fetch, "https://app.ceird.app");
@@ -132,10 +133,7 @@ test("credentialed CORS allows only first-party local/app/org origin shapes", as
   );
 
   const orgOrigin = await preflightFrom(harness.fetch, "https://acme.ceird.app");
-  assert.equal(
-    orgOrigin.headers.get("access-control-allow-origin"),
-    "https://acme.ceird.app",
-  );
+  assert.equal(orgOrigin.headers.get("access-control-allow-origin"), null);
 
   const nestedOrigin = await preflightFrom(
     harness.fetch,
@@ -151,6 +149,28 @@ test("credentialed CORS allows only first-party local/app/org origin shapes", as
     insecureCeirdOrigin.headers.get("access-control-allow-origin"),
     null,
   );
+});
+
+test("credentialed CORS can allow an exact configured preview app origin", async () => {
+  const previewOrigin =
+    "https://ceird-remixed-app-pr-12-abcdefghijklmnop.cillian.workers.dev";
+  await using harness = await makeAuthFlowHarness({
+    corsPolicy: makeCorsPolicy({
+      credentialedOrigins: [previewOrigin],
+    }),
+  });
+
+  const allowedPreview = await preflightFrom(harness.fetch, previewOrigin);
+  assert.equal(
+    allowedPreview.headers.get("access-control-allow-origin"),
+    previewOrigin,
+  );
+
+  const siblingPreview = await preflightFrom(
+    harness.fetch,
+    "https://ceird-remixed-app-pr-13-abcdefghijklmnop.cillian.workers.dev",
+  );
+  assert.equal(siblingPreview.headers.get("access-control-allow-origin"), null);
 });
 
 function jsonRequest(url: string, body: unknown) {

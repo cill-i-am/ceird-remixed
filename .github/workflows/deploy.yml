@@ -50,6 +50,9 @@ jobs:
         run: pnpm exec alchemy deploy alchemy.run.ts --stage "$STAGE" --yes
         env:
           CI: true
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          CEIRD_AUTH_ALLOWED_HOSTS: ${{ vars.CEIRD_AUTH_ALLOWED_HOSTS }}
+          CEIRD_AUTH_TRUSTED_ORIGINS: ${{ vars.CEIRD_AUTH_TRUSTED_ORIGINS }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GITHUB_SHA: ${{ github.sha }}
@@ -89,6 +92,9 @@ jobs:
           pnpm exec alchemy destroy alchemy.run.ts --stage "$STAGE" --yes
         env:
           CI: true
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          CEIRD_AUTH_ALLOWED_HOSTS: ${{ vars.CEIRD_AUTH_ALLOWED_HOSTS }}
+          CEIRD_AUTH_TRUSTED_ORIGINS: ${{ vars.CEIRD_AUTH_TRUSTED_ORIGINS }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

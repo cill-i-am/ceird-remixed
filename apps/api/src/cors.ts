@@ -11,7 +11,6 @@ const allowedHeaders = [
 ].join(",");
 
 const localHostnames = new Set(["localhost", "127.0.0.1"]);
-const ceirdSubdomainPattern = /^[a-z0-9-]+\.ceird\.app$/u;
 
 export const betterAuthAllowedHosts = [
   "api.ceird.app",
@@ -28,7 +27,25 @@ export const betterAuthTrustedOrigins = [
   "http://127.0.0.1:*",
 ] as const;
 
-export function isAllowedCredentialedOrigin(origin: string) {
+export type CorsPolicy = {
+  readonly credentialedOrigins: ReadonlySet<string>;
+};
+
+export function makeCorsPolicy(options?: {
+  readonly credentialedOrigins?: ReadonlyArray<string>;
+}): CorsPolicy {
+  return {
+    credentialedOrigins: new Set([
+      "https://app.ceird.app",
+      ...(options?.credentialedOrigins ?? []),
+    ]),
+  };
+}
+
+export function isAllowedCredentialedOrigin(
+  origin: string,
+  policy = makeCorsPolicy(),
+) {
   const parsed = parseOrigin(origin);
 
   if (parsed === null) {
@@ -43,8 +60,7 @@ export function isAllowedCredentialedOrigin(origin: string) {
     return false;
   }
 
-  return parsed.hostname === "app.ceird.app" ||
-    ceirdSubdomainPattern.test(parsed.hostname);
+  return policy.credentialedOrigins.has(parsed.origin);
 }
 
 function parseOrigin(origin: string) {
@@ -55,18 +71,25 @@ function parseOrigin(origin: string) {
   }
 }
 
-export function preflightCorsResponse(request: Request) {
-  return applyCors(request, new Response(null, { status: 204 }));
+export function preflightCorsResponse(
+  request: Request,
+  policy?: CorsPolicy,
+) {
+  return applyCors(request, new Response(null, { status: 204 }), policy);
 }
 
-export function applyCors(request: Request, response: Response) {
+export function applyCors(
+  request: Request,
+  response: Response,
+  policy?: CorsPolicy,
+) {
   const origin = request.headers.get("origin");
   const headers = new Headers(response.headers);
   headers.append("vary", "Origin");
   headers.append("vary", "Access-Control-Request-Method");
   headers.append("vary", "Access-Control-Request-Headers");
 
-  if (origin !== null && isAllowedCredentialedOrigin(origin)) {
+  if (origin !== null && isAllowedCredentialedOrigin(origin, policy)) {
     headers.set("access-control-allow-origin", origin);
     headers.set("access-control-allow-credentials", "true");
     headers.set("access-control-allow-methods", allowedMethods);

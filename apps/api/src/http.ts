@@ -10,7 +10,12 @@ import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 import * as HttpApiError from "effect/unstable/httpapi/HttpApiError";
 import { Auth, makeAuthLive, type AuthInstance } from "./auth.ts";
-import { applyCors, preflightCorsResponse } from "./cors.ts";
+import {
+  applyCors,
+  makeCorsPolicy,
+  preflightCorsResponse,
+  type CorsPolicy,
+} from "./cors.ts";
 import { DbHealth } from "./db-health.ts";
 
 const helloResponse = HelloResponse.make({
@@ -102,6 +107,7 @@ export function makeHttpApiLayer(options: {
 export function makeHttpApiFetch(options: {
   readonly auth: AuthInstance;
   readonly dbHealthLive: Layer.Layer<DbHealth>;
+  readonly corsPolicy?: CorsPolicy;
 }) {
   const { handler, dispose } = HttpRouter.toWebHandler(
     makeHttpApiLayer({
@@ -112,10 +118,18 @@ export function makeHttpApiFetch(options: {
   );
 
   return {
-    fetch: makeApiFetch({
-      auth: options.auth,
-      apiFetch: handler,
-    }),
+    fetch: makeApiFetch(
+      options.corsPolicy === undefined
+        ? {
+            auth: options.auth,
+            apiFetch: handler,
+          }
+        : {
+            auth: options.auth,
+            apiFetch: handler,
+            corsPolicy: options.corsPolicy,
+          },
+    ),
     dispose,
   };
 }
@@ -123,12 +137,15 @@ export function makeHttpApiFetch(options: {
 export function makeApiFetch(options: {
   readonly auth: AuthInstance;
   readonly apiFetch: (request: Request) => Promise<Response>;
+  readonly corsPolicy?: CorsPolicy;
 }) {
+  const corsPolicy = options.corsPolicy ?? makeCorsPolicy();
+
   return async (request: Request) => {
     const requestWithHost = ensureHostHeader(request);
 
     if (request.method === "OPTIONS") {
-      return preflightCorsResponse(requestWithHost);
+      return preflightCorsResponse(requestWithHost, corsPolicy);
     }
 
     const url = new URL(requestWithHost.url);
@@ -137,7 +154,7 @@ export function makeApiFetch(options: {
       ? await handleAuthRequest(options.auth, requestWithHost, url)
       : await options.apiFetch(requestWithHost);
 
-    return applyCors(requestWithHost, response);
+    return applyCors(requestWithHost, response, corsPolicy);
   };
 }
 

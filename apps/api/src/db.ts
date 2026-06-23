@@ -9,15 +9,25 @@ export type ApiDb = NodePgDatabase<typeof relations> & {
   readonly $client: Pool;
 };
 
+const databaseConnectionTimeoutMillis = 3_000;
+const databaseQueryTimeoutMillis = 3_000;
+const databaseIdleTimeoutMillis = 10_000;
+const databasePoolMaxConnections = 5;
+
 export function makeApiDb(
   connectionString: Redacted.Redacted<string>,
 ): ApiDb {
+  // Cloudflare isolates may be reused across requests; keep the pool small and
+  // bound both connection acquisition and statements so stalled queries cannot
+  // occupy every Hyperdrive-backed slot indefinitely.
   return drizzle({
     connection: {
       connectionString: Redacted.value(connectionString),
-      max: 5,
-      connectionTimeoutMillis: 3_000,
-      idleTimeoutMillis: 10_000,
+      max: databasePoolMaxConnections,
+      connectionTimeoutMillis: databaseConnectionTimeoutMillis,
+      idleTimeoutMillis: databaseIdleTimeoutMillis,
+      query_timeout: databaseQueryTimeoutMillis,
+      statement_timeout: databaseQueryTimeoutMillis,
     },
     relations,
   });
@@ -35,6 +45,7 @@ export const makeDbHealthLiveFromDb = <TResult>(
       normalizeHealthProbeRows(
         await db.execute(sql<HealthProbeRow>`select 1 as ok`),
       ),
+    timeoutMillis: databaseQueryTimeoutMillis,
   });
 
 function normalizeHealthProbeRows(result: unknown): ReadonlyArray<HealthProbeRow> {

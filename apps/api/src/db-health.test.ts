@@ -33,6 +33,36 @@ test("DbHealth fails when the probe result is unexpected", async () => {
   }
 });
 
+test("DbHealth fails with a controlled error when the probe stalls", async () => {
+  const exit = await Effect.runPromiseExit(
+    Effect.gen(function* () {
+      const dbHealth = yield* DbHealth;
+      return yield* dbHealth.check();
+    }).pipe(
+      Effect.provide(
+        makeDbHealthLive({
+          queryHealth: () =>
+            new Promise((resolve) => {
+              setTimeout(() => resolve([{ ok: 1 }]), 50);
+            }),
+          timeoutMillis: 1,
+        }),
+      ),
+    ),
+  );
+
+  assert.equal(Exit.isFailure(exit), true);
+  if (Exit.isFailure(exit)) {
+    const failure = await Effect.runPromise(
+      Effect.failCause(exit.cause).pipe(Effect.flip),
+    );
+
+    assert.equal(failure instanceof DbHealthCheckFailed, true);
+    assert.equal(failure.operation, "query");
+    assert.match(failure.message, /timed out/);
+  }
+});
+
 function checkDbHealth(rows: ReadonlyArray<{ readonly ok: number }>) {
   return Effect.gen(function* () {
     const dbHealth = yield* DbHealth;

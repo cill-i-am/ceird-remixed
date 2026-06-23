@@ -9,6 +9,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import { createAuth, makeAuthLive, type AuthInstance } from "../auth.ts";
+import type { CorsPolicy } from "../cors.ts";
 import { makeDbHealthLiveFromDb } from "../db.ts";
 import { makeHttpApiFetch } from "../http.ts";
 
@@ -32,7 +33,9 @@ export type AuthFlowHarness = AsyncDisposable & {
   readonly signUpAndReadCookie: (input: SignUpInput) => Promise<string>;
 };
 
-export async function makeAuthFlowHarness(): Promise<AuthFlowHarness> {
+export async function makeAuthFlowHarness(options?: {
+  readonly corsPolicy?: CorsPolicy;
+}): Promise<AuthFlowHarness> {
   const client = new PGlite();
   await applyMigration(client);
   await assertAuthTablesExist(client);
@@ -41,10 +44,18 @@ export async function makeAuthFlowHarness(): Promise<AuthFlowHarness> {
     relations,
   });
   const auth = createAuth(db, { secret: testSecret });
-  const api = makeHttpApiFetch({
-    auth,
-    dbHealthLive: makeDbHealthLiveFromDb(db),
-  });
+  const api = makeHttpApiFetch(
+    options?.corsPolicy === undefined
+      ? {
+          auth,
+          dbHealthLive: makeDbHealthLiveFromDb(db),
+        }
+      : {
+          auth,
+          dbHealthLive: makeDbHealthLiveFromDb(db),
+          corsPolicy: options.corsPolicy,
+        },
+  );
   let disposed = false;
 
   return {

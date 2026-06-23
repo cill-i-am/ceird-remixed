@@ -31,11 +31,16 @@ export type HealthProbeRow = {
 
 export const makeDbHealthLive = (options: {
   readonly queryHealth: () => Promise<ReadonlyArray<HealthProbeRow>>;
+  readonly timeoutMillis?: number;
 }) =>
   Layer.succeed(DbHealth)({
     check: Effect.fn("DbHealth.check")(function* () {
       const rows = yield* Effect.tryPromise({
-        try: () => options.queryHealth(),
+        try: () =>
+          withTimeout(
+            options.queryHealth(),
+            options.timeoutMillis ?? 3_000,
+          ),
         catch: (cause) =>
           DbHealthCheckFailed.make({
             operation: "query",
@@ -64,3 +69,22 @@ export const makeDbHealthLive = (options: {
       });
     }),
   });
+
+function withTimeout<T>(promise: Promise<T>, timeoutMillis: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`Database health query timed out after ${timeoutMillis}ms.`));
+    }, timeoutMillis);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}

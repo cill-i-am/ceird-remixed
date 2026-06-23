@@ -61,6 +61,8 @@ export type AuthError =
 export type AuthConfig = {
   readonly secret: Redacted.Redacted<string>;
   readonly cookieDomain?: string;
+  readonly allowedHosts?: ReadonlyArray<string>;
+  readonly trustedOrigins?: ReadonlyArray<string>;
 };
 
 export class Auth extends Context.Service<
@@ -80,12 +82,20 @@ const decodeSession = Schema.decodeUnknownEffect(BetterAuthSessionSchema);
 
 export function createAuth(database: Parameters<typeof drizzleAdapter>[0], config: AuthConfig) {
   const baseProtocol = config.cookieDomain === undefined ? "auto" : "https";
+  const allowedHosts = [
+    ...betterAuthAllowedHosts,
+    ...(config.allowedHosts ?? []),
+  ];
+  const trustedOrigins = [
+    ...betterAuthTrustedOrigins,
+    ...(config.trustedOrigins ?? []),
+  ];
 
   return betterAuth({
     appName: "Ceird",
     basePath: "/api/auth",
     baseURL: {
-      allowedHosts: [...betterAuthAllowedHosts],
+      allowedHosts,
       protocol: baseProtocol,
     },
     database: drizzleAdapter(database, {
@@ -100,8 +110,11 @@ export function createAuth(database: Parameters<typeof drizzleAdapter>[0], confi
     emailAndPassword: {
       enabled: true,
     },
-    trustedOrigins: [...betterAuthTrustedOrigins],
+    trustedOrigins,
     secret: Redacted.value(config.secret),
+    // TODO(auth-hardening): Better Auth's default rate limit storage is
+    // per-isolate memory. Configure shared storage before treating rate limits
+    // as globally reliable on Cloudflare.
     advanced: {
       crossSubDomainCookies: {
         enabled: config.cookieDomain !== undefined,
