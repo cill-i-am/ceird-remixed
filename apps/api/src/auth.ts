@@ -17,10 +17,6 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import {
-  betterAuthAllowedHosts,
-  betterAuthTrustedOrigins,
-} from "./cors.ts";
 
 export class Principal extends Schema.Class<Principal>("Principal")({
   id: UserIdSchema,
@@ -66,8 +62,9 @@ export type AuthError =
 
 export type AuthConfig = {
   readonly secret: Redacted.Redacted<string>;
-  readonly allowedHosts?: ReadonlyArray<string>;
-  readonly trustedOrigins?: ReadonlyArray<string>;
+  readonly allowedHosts: ReadonlyArray<string>;
+  readonly trustedOrigins: ReadonlyArray<string>;
+  readonly protocol: "http" | "https";
   readonly useSecureCookies: boolean;
   readonly backgroundTaskHandler?: (promise: Promise<unknown>) => void;
 };
@@ -91,21 +88,12 @@ export function createAuth(
   database: Parameters<typeof drizzleAdapter>[0],
   config: AuthConfig,
 ) {
-  const allowedHosts = [
-    ...betterAuthAllowedHosts,
-    ...(config.allowedHosts ?? []),
-  ];
-  const trustedOrigins = [
-    ...betterAuthTrustedOrigins,
-    ...(config.trustedOrigins ?? []),
-  ];
-
   return betterAuth({
     appName: "Ceird",
     basePath: "/api/auth",
     baseURL: {
-      allowedHosts,
-      protocol: "auto",
+      allowedHosts: [...config.allowedHosts],
+      protocol: config.protocol,
     },
     database: drizzleAdapter(database, {
       provider: "pg",
@@ -120,9 +108,10 @@ export function createAuth(
     emailAndPassword: {
       enabled: true,
     },
-    trustedOrigins,
+    trustedOrigins: [...config.trustedOrigins],
     secret: Redacted.value(config.secret),
     advanced: {
+      trustedProxyHeaders: false,
       useSecureCookies: config.useSecureCookies,
       ipAddress: {
         ipAddressHeaders: ["cf-connecting-ip"],

@@ -3,6 +3,7 @@ import { test } from "node:test";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { Auth, AuthSessionLookupFailed } from "./auth.ts";
+import { makeStageAuthConfig } from "./auth-config.ts";
 import { isAllowedCredentialedOrigin, makeCorsPolicy } from "./cors.ts";
 import { makeAuthFlowHarness } from "./test/auth-flow-harness.ts";
 
@@ -200,7 +201,14 @@ test("default credentialed CORS policy rejects unconfigured localhost", () => {
 });
 
 test("credentialed CORS allows only explicit first-party app and local origins", async () => {
-  await using harness = await makeAuthFlowHarness();
+  await using harness = await makeAuthFlowHarness({
+    corsPolicy: makeCorsPolicy({
+      credentialedOrigins: [
+        "https://app.ceird.app",
+        "http://localhost:3000",
+      ],
+    }),
+  });
 
   const appOrigin = await preflightFrom(harness.fetch, "https://app.ceird.app");
   assert.equal(
@@ -227,6 +235,19 @@ test("credentialed CORS allows only explicit first-party app and local origins",
   );
 });
 
+test("preview credentialed CORS rejects production app unless explicitly configured", () => {
+  const preview = makeStageAuthConfig("pr-12");
+  const policy = makeCorsPolicy({
+    credentialedOrigins: [preview.appOrigin],
+  });
+
+  assert.equal(
+    isAllowedCredentialedOrigin("https://app.ceird.app", policy),
+    false,
+  );
+  assert.equal(isAllowedCredentialedOrigin(preview.appOrigin, policy), true);
+});
+
 test("credentialed CORS can allow an exact configured preview app origin", async () => {
   const previewOrigin =
     "https://ceird-remixed-app-pr-12-abcdefghijklmnop.cillian.workers.dev";
@@ -247,6 +268,40 @@ test("credentialed CORS can allow an exact configured preview app origin", async
     "https://ceird-remixed-app-pr-13-abcdefghijklmnop.cillian.workers.dev",
   );
   assert.equal(siblingPreview.headers.get("access-control-allow-origin"), null);
+});
+
+test("Better Auth rejects spoofed forwarded host from an untrusted request URL", async () => {
+  const preview = makeStageAuthConfig("pr-12");
+  await using harness = await makeAuthFlowHarness({
+    authConfig: {
+      allowedHosts: [preview.apiHost],
+      trustedOrigins: [preview.appOrigin],
+      protocol: "https",
+      useSecureCookies: true,
+    },
+    corsPolicy: makeCorsPolicy({
+      credentialedOrigins: [preview.appOrigin],
+    }),
+  });
+
+  const response = await harness.fetch(
+    jsonRequest("https://evil.example/api/auth/sign-up/email", {
+      email: "spoofed-forwarded-host@example.com",
+      password: "correct horse battery staple",
+      name: "Spoofed Host",
+    }, {
+      host: "evil.example",
+      origin: preview.appOrigin,
+      "x-forwarded-host": preview.apiHost,
+      "x-forwarded-proto": "https",
+    }),
+  );
+
+  assert.notEqual(response.status, 200);
+  assert.equal(
+    await harness.userCountByEmail("spoofed-forwarded-host@example.com"),
+    0,
+  );
 });
 
 function jsonRequest(

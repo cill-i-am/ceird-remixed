@@ -60,6 +60,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           PULL_REQUEST: ${{ github.event_name == 'pull_request' && github.event.number || '' }}
 
   cleanup:
@@ -85,9 +86,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Test
-        run: pnpm test
-
       - name: Destroy PR stage
         run: |
           if [ "$STAGE" = "prod" ]; then
@@ -104,4 +102,5 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           PULL_REQUEST: ${{ github.event.number }}

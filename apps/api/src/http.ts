@@ -175,7 +175,12 @@ async function handleAuthRequest(
   request: Request,
   url: URL,
 ) {
-  const response = await auth.handler(request);
+  const response = await auth.handler(request).catch(() =>
+    Response.json(
+      { error: "invalid_auth_request" },
+      { status: 400 },
+    )
+  );
 
   if (url.pathname !== "/api/auth/ok" || response.status !== 200) {
     return response;

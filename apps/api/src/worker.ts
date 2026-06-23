@@ -6,6 +6,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as HttpEffect from "effect/unstable/http/HttpEffect";
 import {
+  BetterAuthSecretSchema,
   makeStageAuthConfig,
   parseHostList,
   parseOriginList,
@@ -40,7 +41,10 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
     const hyperdrive = yield* Cloudflare.Hyperdrive.bind(ApiHyperdrive);
     const stage = yield* Alchemy.Stage;
     const stageAuthConfig = makeStageAuthConfig(stage);
-    const authSecret = yield* Config.redacted("BETTER_AUTH_SECRET");
+    const authSecret = yield* Config.schema(
+      BetterAuthSecretSchema,
+      "BETTER_AUTH_SECRET",
+    );
     const configuredTrustedOrigins = yield* Config.string(
       "CEIRD_AUTH_TRUSTED_ORIGINS",
     ).pipe(Config.option);
@@ -68,6 +72,7 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
           secret: authSecret,
           trustedOrigins,
           allowedHosts,
+          protocol: "https",
           useSecureCookies: true,
           backgroundTaskHandler: runAuthBackgroundTask,
         });

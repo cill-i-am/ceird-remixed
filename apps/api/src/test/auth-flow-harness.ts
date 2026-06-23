@@ -57,6 +57,7 @@ export async function makeAuthFlowHarness(options?: {
     secret: testSecret,
     allowedHosts: ["localhost"],
     trustedOrigins: ["http://localhost:3000"],
+    protocol: "http",
     useSecureCookies: false,
     ...options?.authConfig,
   });

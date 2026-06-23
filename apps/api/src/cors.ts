@@ -10,15 +10,6 @@ const allowedHeaders = [
   "x-b3-traceid",
 ].join(",");
 
-export const betterAuthAllowedHosts = [
-  "api.ceird.app",
-  "remixed-api.ceird.app",
-] as const;
-
-export const betterAuthTrustedOrigins = [
-  "https://app.ceird.app",
-] as const;
-
 export type CorsPolicy = {
   readonly credentialedOrigins: ReadonlySet<string>;
 };
@@ -27,10 +18,7 @@ export function makeCorsPolicy(options?: {
   readonly credentialedOrigins?: ReadonlyArray<string>;
 }): CorsPolicy {
   return {
-    credentialedOrigins: new Set([
-      "https://app.ceird.app",
-      ...(options?.credentialedOrigins ?? []),
-    ]),
+    credentialedOrigins: new Set(options?.credentialedOrigins ?? []),
   };
 }
 

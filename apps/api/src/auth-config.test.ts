@@ -2,6 +2,7 @@ import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   makeStageAuthConfig,
+  parseBetterAuthSecret,
   parseHostList,
   parseOriginList,
 } from "./auth-config.ts";
@@ -38,4 +39,19 @@ test("stage auth config returns exact preview origins", () => {
     appHost: "app-pr-12.ceird.app",
     appOrigin: "https://app-pr-12.ceird.app",
   });
+});
+
+test("auth config rejects short Better Auth secrets", () => {
+  assert.throws(
+    () => parseBetterAuthSecret("short-secret"),
+    /Invalid data <redacted>/,
+  );
+});
+
+test("auth config accepts Better Auth secrets without exposing the value", () => {
+  const secret = parseBetterAuthSecret(
+    "local-test-secret-at-least-thirty-two-characters",
+  );
+
+  assert.equal(String(secret), "<redacted>");
 });

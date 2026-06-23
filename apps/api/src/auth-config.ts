@@ -1,6 +1,14 @@
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+
 const wildcardPattern = /[*?[\]{}()]/u;
+const betterAuthSecretMinLength = 32;
 const productionAppOrigin = "https://app.ceird.app";
 const productionApiHost = "api.ceird.app";
+
+export const BetterAuthSecretSchema = Schema.RedactedFromValue(
+  Schema.String.check(Schema.isMinLength(betterAuthSecretMinLength)),
+);
 
 export type StageAuthConfig = {
   readonly apiHost: string;
@@ -80,6 +88,12 @@ export function parseHostList(input: string | undefined): ReadonlyArray<string> 
 
     return parsed.host.toLowerCase();
   });
+}
+
+export function parseBetterAuthSecret(
+  input: string,
+): Redacted.Redacted<string> {
+  return Schema.decodeUnknownSync(BetterAuthSecretSchema)(input);
 }
 
 function splitConfigList(input: string | undefined): ReadonlyArray<string> {
