@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 import * as HttpApi from "effect/unstable/httpapi/HttpApi";
 import * as HttpApiEndpoint from "effect/unstable/httpapi/HttpApiEndpoint";
+import * as HttpApiError from "effect/unstable/httpapi/HttpApiError";
 import * as HttpApiGroup from "effect/unstable/httpapi/HttpApiGroup";
 
 /** Successful response from the API health endpoint. */
@@ -19,11 +20,27 @@ export class HelloResponse extends Schema.Class<HelloResponse>("HelloResponse")(
   stage: Schema.Literal("dummy"),
 }) {}
 
+/** Successful response from the API database health endpoint. */
+export class DbHealthResponse extends Schema.Class<DbHealthResponse>(
+  "DbHealthResponse",
+)({
+  ok: Schema.Literal(true),
+  service: Schema.Literal("ceird-api"),
+  database: Schema.Struct({
+    provider: Schema.Literal("neon-postgres"),
+    transport: Schema.Literal("cloudflare-hyperdrive"),
+  }),
+}) {}
+
 /** Public HTTP contract for the Ceird API. */
 export const Api = HttpApi.make("CeirdApi").add(
   HttpApiGroup.make("Meta").add(
     HttpApiEndpoint.get("health", "/health", {
       success: HealthResponse,
+    }),
+    HttpApiEndpoint.get("dbHealth", "/db/health", {
+      success: DbHealthResponse,
+      error: HttpApiError.ServiceUnavailable,
     }),
     HttpApiEndpoint.get("root", "/", {
       success: HelloResponse,

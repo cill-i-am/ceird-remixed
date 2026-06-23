@@ -15,6 +15,7 @@ These instructions apply to `apps/*` and refine the repository root `AGENTS.md`.
 - Assemble handlers with HttpApiBuilder and provide platform/router layers at the Worker or server entrypoint.
 - For Cloudflare Worker APIs, prefer an Effect Worker that returns the HttpApi router effect over ad hoc `fetch` path routing.
 - Keep one-off manual `fetch` handlers limited to temporary smoke tests or tiny probes; migrate them before expanding the API surface.
+- API authentication belongs at the API/auth layer so public API, MCP server, mobile, and third-party clients share one auth boundary. The API database is Neon Postgres fronted by Cloudflare Hyperdrive and declared through the root Alchemy stack.
 
 ## RPC
 

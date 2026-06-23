@@ -2,9 +2,17 @@
   "name": "@ceird/api",
   "private": true,
   "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "tsx --test \"src/**/*.test.ts\""
+  },
   "dependencies": {
     "@ceird/api-contract": "workspace:*",
     "alchemy": "2.0.0-beta.57",
-    "effect": "4.0.0-beta.85"
+    "effect": "4.0.0-beta.85",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0"
   }
 }
