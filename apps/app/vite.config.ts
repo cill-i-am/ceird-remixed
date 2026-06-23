@@ -3,6 +3,11 @@ import viteReact from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  build: {
+    rolldownOptions: {
+      external: ["cloudflare:workers"],
+    },
+  },
   server: {
     port: 3000,
   },

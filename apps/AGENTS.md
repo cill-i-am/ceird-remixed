@@ -31,8 +31,15 @@ These instructions apply to `apps/*` and refine the repository root `AGENTS.md`.
 - When using TanStack Query with TanStack Start, use the official router SSR query integration. Create a fresh `QueryClient` inside `getRouter`, put it in router context, prefetch critical data in loaders with `queryClient.ensureQueryData`, and read that data in components with `useSuspenseQuery`.
 - Keep loader prefetch functions narrow: `await queryClient.ensureQueryData(...)` without returning the data when the component reads it from TanStack Query. This keeps route-tree type inference smaller as the app grows.
 - Keep transport concerns out of components and route loaders. Effect HttpApi contracts own endpoint types and schemas; Effect HttpClient/FetchHttpClient layers own fetch, transient retries, timeouts, tracing, and rate limiting; TanStack Query owns UI cache policy, stale time, SSR hydration, polling/refetch intervals, and focus-driven refetching.
+- Use one typed API client and one domain-scoped TanStack Query facade for app-facing API reads. The typed Effect HttpApi client layer owns the shared `@ceird/api-contract` contract, transport, retries, tracing headers, and response decoding. Domain query modules own TanStack Query options, query keys, UI cache policy, and conversion into plain view models.
+- Route loaders and components should consume the query facade, for example `apiQueries.meta.health(...)`, `apiQueries.sites.list(...)`, or `apiQueries.issues.detail(...)`. Do not grow a flat bag of endpoint-specific query helpers such as `apiHealthQueryOptions`, `sitesListQueryOptions`, and `issuesDetailQueryOptions` as the primary app API.
+- Keep query keys explicit and domain-scoped in the same module as the query factory so invalidation stays discoverable when mutations arrive. The facade should stay stable even when the underlying runtime transport changes.
 - Apply automatic HTTP retries conservatively at the typed client or transport boundary. Retry transient `GET` requests by default; do not retry mutations unless the command has an explicit idempotency strategy such as an idempotency key, natural unique constraint, deduplication record, state-transition guard, or outbox/inbox.
 - Do not introduce another rich-app framework such as Next, Remix, or SvelteKit unless the user explicitly asks for it or the repo records a deliberate framework change.
+
+### API Transport Boundaries
+
+Browser API calls use the public API URL. TanStack Start SSR calls should use the app Worker's server-only service binding to the API Worker. Both transports must be hidden behind the typed API client so routes and components never choose transport directly.
 
 ## Public Config And Alchemy Inputs
 

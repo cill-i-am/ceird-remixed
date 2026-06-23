@@ -1,44 +1,27 @@
-import { Api, type HealthResponse } from "@ceird/api-contract";
+import { Api } from "@ceird/api-contract";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientError from "effect/unstable/http/HttpClientError";
-import type * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
+import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import * as HttpApiClient from "effect/unstable/httpapi/HttpApiClient";
 import * as Schedule from "effect/Schedule";
-import { createEffectQuery } from "effect-query";
+import { runtimeApiFetch } from "./api-runtime-fetch";
 import type { ApiBaseUrl } from "./public-config-schema";
 
-class ApiClient extends Context.Service<
+/** Effect service for the shared typed API client. */
+export class ApiClient extends Context.Service<
   ApiClient,
   HttpApiClient.ForApi<typeof Api>
 >()("ceird/ApiClient") {}
-
-/** API health state rendered by the web app. */
-export type ApiHealthStatus =
-  | {
-      readonly _tag: "Healthy";
-      readonly service: HealthResponse["service"];
-      readonly status: HealthResponse["status"];
-    }
-  | {
-      readonly _tag: "Unhealthy";
-      readonly message: string;
-    };
-
-const unhealthyApiHealthStatus: ApiHealthStatus = {
-  _tag: "Unhealthy",
-  message: "API health check failed.",
-};
 
 const transientGetRequestRetryCount = 2;
 const transientGetRequestRetrySchedule = Schedule.exponential(
   "100 millis",
   2,
 ).pipe(Schedule.jittered);
-export const apiHealthRefetchInterval = 30 * 1000;
 
 const isTransientHttpResponse = (
   response: HttpClientResponse.HttpClientResponse,
@@ -65,15 +48,18 @@ const isTransientHttpClientError = (error: unknown) => {
   );
 };
 
+const rejectTransientHttpResponse = (
+  response: HttpClientResponse.HttpClientResponse,
+) =>
+  isTransientHttpResponse(response)
+    ? HttpClientResponse.filterStatus(response, () => false)
+    : Effect.succeed(response);
+
 const retryTransientGetRequests = (client: HttpClient.HttpClient) =>
   HttpClient.transform(client, (effect, request) =>
     request.method === "GET"
       ? effect.pipe(
-          Effect.repeat({
-            schedule: transientGetRequestRetrySchedule,
-            times: transientGetRequestRetryCount,
-            while: isTransientHttpResponse,
-          }),
+          Effect.flatMap(rejectTransientHttpResponse),
           Effect.retry({
             schedule: transientGetRequestRetrySchedule,
             times: transientGetRequestRetryCount,
@@ -83,18 +69,16 @@ const retryTransientGetRequests = (client: HttpClient.HttpClient) =>
       : effect,
   );
 
-function makeApiClientLive(
+/** Build the live Effect layer for the typed API client. */
+export function makeApiClientLive(
   apiBaseUrl: ApiBaseUrl,
-  fetchImplementation?: typeof fetch,
+  fetchImplementation: typeof fetch = runtimeApiFetch,
 ) {
-  const fetchHttpClientLayer =
-    fetchImplementation === undefined
-      ? FetchHttpClient.layer
-      : FetchHttpClient.layer.pipe(
-          Layer.provide(
-            Layer.succeed(FetchHttpClient.Fetch)(fetchImplementation),
-          ),
-        );
+  const fetchHttpClientLayer = FetchHttpClient.layer.pipe(
+    Layer.provide(
+      Layer.succeed(FetchHttpClient.Fetch)(fetchImplementation),
+    ),
+  );
 
   return Layer.effect(
     ApiClient,
@@ -103,38 +87,4 @@ function makeApiClientLive(
       transformClient: retryTransientGetRequests,
     }),
   ).pipe(Layer.provide(fetchHttpClientLayer));
-}
-
-const loadApiHealthStatus = Effect.fn("loadApiHealthStatus")(() =>
-  Effect.gen(function* () {
-    const client = yield* ApiClient;
-    const response = yield* client.Meta.health();
-
-    return {
-      _tag: "Healthy",
-      service: response.service,
-      status: response.status,
-    } satisfies ApiHealthStatus;
-  }),
-);
-
-/** TanStack Query options for API health backed by the shared Effect HttpApi contract. */
-export function apiHealthQueryOptions(
-  options: Readonly<{ apiBaseUrl: ApiBaseUrl; fetch?: typeof fetch }>,
-) {
-  const effectQuery = createEffectQuery(
-    makeApiClientLive(options.apiBaseUrl, options.fetch),
-  );
-
-  return effectQuery.queryOptions({
-    queryKey: ["api", "health", options.apiBaseUrl.href] as const,
-    refetchInterval: apiHealthRefetchInterval,
-    queryFn: () =>
-      loadApiHealthStatus().pipe(
-        Effect.match({
-          onFailure: () => unhealthyApiHealthStatus,
-          onSuccess: (status) => status,
-        }),
-      ),
-  });
 }

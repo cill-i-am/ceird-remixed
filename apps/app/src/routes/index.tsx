@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { apiHealthQueryOptions } from "../api-client";
+import { apiQueries } from "../api-queries";
 import { HealthBadge } from "../health-badge";
 import { parsePublicConfig, publicConfigQueryOptions } from "../public-config";
 
@@ -11,7 +11,7 @@ export const Route = createFileRoute("/")({
     );
 
     await context.queryClient.ensureQueryData(
-      apiHealthQueryOptions({ apiBaseUrl }),
+      apiQueries.meta.health({ apiBaseUrl }),
     );
   },
   component: Home,
@@ -21,7 +21,7 @@ function Home() {
   const { data: publicConfig } = useSuspenseQuery(publicConfigQueryOptions);
   const { apiBaseUrl } = parsePublicConfig(publicConfig);
   const { data: apiHealth } = useSuspenseQuery(
-    apiHealthQueryOptions({ apiBaseUrl }),
+    apiQueries.meta.health({ apiBaseUrl }),
   );
 
   return (

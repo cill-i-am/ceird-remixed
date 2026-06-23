@@ -66,6 +66,7 @@ export default Alchemy.Stack(
       },
       env: {
         API_URL: apiUrl,
+        API_WORKER: api,
       },
     });
     const appUrl =

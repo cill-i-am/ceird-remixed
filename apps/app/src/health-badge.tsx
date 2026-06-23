@@ -1,4 +1,4 @@
-import type { ApiHealthStatus } from "./api-client";
+import type { ApiHealthStatus } from "./queries/meta-queries";
 
 /** Renders the current API health state. */
 export function HealthBadge({

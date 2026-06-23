@@ -1,9 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "vitest";
-import {
-  apiHealthRefetchInterval,
-  apiHealthQueryOptions,
-} from "./api-client";
+import { apiQueries } from "./api-queries";
+import { apiHealthRefetchInterval } from "./queries/meta-queries";
 import { parseApiBaseUrl } from "./public-config-schema";
 
 type FetchCall = {
@@ -18,11 +16,20 @@ const healthyResponseBody = {
   status: "healthy",
 };
 const testApiBaseUrl = parseApiBaseUrl("http://api.test");
+const testApiHealthUrl = new URL("/health", testApiBaseUrl).href;
 
-describe("apiHealthQueryOptions", () => {
+describe("apiQueries.meta.health", () => {
+  test("uses the API metadata health query key", () => {
+    expect(
+      apiQueries.meta.health({
+        apiBaseUrl: testApiBaseUrl,
+      }).queryKey,
+    ).toEqual(["api", "meta", "health", testApiBaseUrl.href]);
+  });
+
   test("polls API health every thirty seconds", () => {
     expect(
-      apiHealthQueryOptions({
+      apiQueries.meta.health({
         apiBaseUrl: testApiBaseUrl,
       }).refetchInterval,
     ).toBe(apiHealthRefetchInterval);
@@ -35,7 +42,7 @@ describe("apiHealthQueryOptions", () => {
         : jsonResponse(healthyResponseBody),
     );
     const queryClient = makeQueryClient();
-    const queryOptions = apiHealthQueryOptions({
+    const queryOptions = apiQueries.meta.health({
       apiBaseUrl: testApiBaseUrl,
       fetch,
     });
@@ -48,6 +55,10 @@ describe("apiHealthQueryOptions", () => {
       status: "healthy",
     });
     expect(calls.map((call) => call.method)).toEqual(["GET", "GET"]);
+    expect(calls.map((call) => call.url)).toEqual([
+      testApiHealthUrl,
+      testApiHealthUrl,
+    ]);
 
     const firstCall = calls.at(0);
     if (firstCall === undefined) {
@@ -63,7 +74,7 @@ describe("apiHealthQueryOptions", () => {
       throw new TypeError("Network unavailable");
     });
     const queryClient = makeQueryClient();
-    const queryOptions = apiHealthQueryOptions({
+    const queryOptions = apiQueries.meta.health({
       apiBaseUrl: testApiBaseUrl,
       fetch,
     });
@@ -75,6 +86,39 @@ describe("apiHealthQueryOptions", () => {
       message: "API health check failed.",
     });
     expect(calls.map((call) => call.method)).toEqual(["GET", "GET", "GET"]);
+    expect(calls.map((call) => call.url)).toEqual([
+      testApiHealthUrl,
+      testApiHealthUrl,
+      testApiHealthUrl,
+    ]);
+  });
+
+  test("uses one retry budget across transient responses and transport failures", async () => {
+    const { calls, fetch } = makeFetch((callIndex) => {
+      if (callIndex === 1) {
+        throw new TypeError("Network unavailable");
+      }
+
+      return new Response(undefined, { status: 503 });
+    });
+    const queryClient = makeQueryClient();
+    const queryOptions = apiQueries.meta.health({
+      apiBaseUrl: testApiBaseUrl,
+      fetch,
+    });
+
+    const health = await queryClient.ensureQueryData(queryOptions);
+
+    expect(health).toEqual({
+      _tag: "Unhealthy",
+      message: "API health check failed.",
+    });
+    expect(calls.map((call) => call.method)).toEqual(["GET", "GET", "GET"]);
+    expect(calls.map((call) => call.url)).toEqual([
+      testApiHealthUrl,
+      testApiHealthUrl,
+      testApiHealthUrl,
+    ]);
   });
 });
 
