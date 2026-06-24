@@ -30,7 +30,8 @@ export const ApiDatabase = Effect.gen(function* () {
 
   const branch = yield* Neon.Branch("ApiDatabaseBranch", {
     project,
-    protected: stage === "prod",
+    // TODO: Enable prod branch protection once the Neon plan supports it.
+    protected: false,
     migrationsDir: schema.out,
   });
 

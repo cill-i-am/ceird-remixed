@@ -20,6 +20,10 @@ work:
   Neon resources. That is simple for this auth slice, but can become expensive
   or quota-prone. Move dev/PR stages to branches under a shared non-prod Neon
   project once the shared project lifecycle and cleanup policy are agreed.
+- **Prod Neon branch protection:** production branch protection is currently
+  disabled because the active Neon plan rejects protected branch creation.
+  Enable protection before real production data lands, or upgrade/adjust the
+  Neon plan so Alchemy can create protected production branches.
 - **Request-scoped HttpApi construction:** Better Auth routes skip the Effect
   HttpApi router, but protected non-auth API routes still build the router and
   layers per request. Keep this acceptable for the first slice; revisit a safe
