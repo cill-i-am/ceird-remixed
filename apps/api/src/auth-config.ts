@@ -1,7 +1,7 @@
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 
-const wildcardPattern = /[*?[\]{}()]/u;
+const wildcardPattern = /[*?{}()]/u;
 const betterAuthSecretMinLength = 32;
 const productionAppOrigin = "https://app.ceird.app";
 const productionApiHost = "api.ceird.app";
@@ -37,7 +37,10 @@ export function makeStageAuthConfig(stage: string): StageAuthConfig {
   };
 }
 
-export function parseOriginList(input: string | undefined): ReadonlyArray<string> {
+export function parseOriginList(
+  input: string | undefined,
+  options: { readonly allowLocalHttp?: boolean } = {},
+): ReadonlyArray<string> {
   return splitConfigList(input).map((origin) => {
     if (wildcardPattern.test(origin)) {
       throw new Error(
@@ -47,7 +50,10 @@ export function parseOriginList(input: string | undefined): ReadonlyArray<string
 
     const parsed = new URL(origin);
 
-    if (parsed.protocol !== "https:" && !isLocalHttpOrigin(parsed)) {
+    if (
+      parsed.protocol !== "https:" &&
+      !(options.allowLocalHttp === true && isLocalHttpOrigin(parsed))
+    ) {
       throw new Error(
         `CEIRD_AUTH_TRUSTED_ORIGINS must use https except loopback local origins: ${origin}`,
       );

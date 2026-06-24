@@ -20,18 +20,16 @@ env:
   STAGE: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || (github.ref == 'refs/heads/main' && 'prod' || github.ref_name) }}
 
 jobs:
-  deploy:
-    name: Deploy
+  checks:
+    name: Checks
     if: ${{ (github.event_name != 'pull_request' || github.event.action != 'closed') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: ubuntu-latest
-    # Configure production and preview environments with separate least-privilege
-    # Cloudflare/Neon credentials; preview secrets must not be production creds.
-    environment: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
         with:
@@ -51,6 +49,35 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+  deploy:
+    name: Deploy
+    needs: checks
+    if: ${{ (github.event_name != 'pull_request' || github.event.action != 'closed') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    # Configure production and preview environments with separate least-privilege
+    # Cloudflare/Neon credentials; preview secrets must not be production creds.
+    environment: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.2
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Deploy with Alchemy
         run: pnpm exec alchemy deploy alchemy.run.ts --stage "$STAGE" --yes
@@ -76,6 +103,8 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
         with:

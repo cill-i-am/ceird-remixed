@@ -16,11 +16,18 @@ import { createAuth } from "./auth.ts";
 import {
   runAuthBackgroundTask,
   runWithBackgroundTaskContext,
+  waitForRequestBackgroundTasks,
 } from "./background-tasks.ts";
-import { makeCorsPolicy, type CorsPolicy } from "./cors.ts";
+import {
+  applyCors,
+  makeCorsPolicy,
+  preflightCorsResponse,
+  type CorsPolicy,
+} from "./cors.ts";
 import { closeApiDb, makeApiDb, makeDbHealthLiveFromDb } from "./db.ts";
 import { ApiHyperdrive } from "./db-infra.ts";
 import { makeHttpApiFetch } from "./http.ts";
+import { classifyApiRequest } from "./request-routing.ts";
 
 export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
   "Api",
@@ -41,6 +48,7 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
   Effect.gen(function* () {
     const hyperdrive = yield* Cloudflare.Hyperdrive.bind(ApiHyperdrive);
     const stage = yield* Alchemy.Stage;
+    const alchemyContext = yield* Alchemy.AlchemyContext;
     const stageAuthConfig = makeStageAuthConfig(stage);
     const authSecret = yield* Config.schema(
       BetterAuthSecretSchema,
@@ -54,7 +62,9 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
     ).pipe(Config.option);
     const trustedOrigins = unique([
       stageAuthConfig.appOrigin,
-      ...parseOriginList(Option.getOrUndefined(configuredTrustedOrigins)),
+      ...parseOriginList(Option.getOrUndefined(configuredTrustedOrigins), {
+        allowLocalHttp: alchemyContext.dev,
+      }),
     ]);
     const allowedHosts = unique(
       [
@@ -71,8 +81,17 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
         const executionContext = yield* WorkerExecutionContext;
         const connectionString = yield* hyperdrive.connectionString;
 
-        return yield* HttpEffect.fromWebHandler((request) =>
-          handleRequestWithScopedRuntime({
+        return yield* HttpEffect.fromWebHandler((request) => {
+          const publicResponse = handleRequestWithoutScopedRuntime(
+            request,
+            corsPolicy,
+          );
+
+          if (publicResponse !== undefined) {
+            return Promise.resolve(publicResponse);
+          }
+
+          return handleRequestWithScopedRuntime({
             request,
             connectionString,
             authSecret,
@@ -80,8 +99,8 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
             allowedHosts,
             corsPolicy,
             waitUntil: (promise) => executionContext.waitUntil(promise),
-          })
-        );
+          });
+        });
       }),
     };
   }).pipe(Effect.provide(Cloudflare.HyperdriveBindingLive)),
@@ -127,10 +146,62 @@ async function handleRequestWithScopedRuntime(options: {
       () => api.fetch(options.request),
     );
   } finally {
-    const dispose = Promise.allSettled(backgroundTasks).then(async () => {
-      await api.dispose();
-      await closeApiDb(db);
+    options.waitUntil(disposeScopedRequestRuntime({ api, db, backgroundTasks }));
+  }
+}
+
+function handleRequestWithoutScopedRuntime(
+  request: Request,
+  corsPolicy: CorsPolicy,
+) {
+  const route = classifyApiRequest(request);
+
+  switch (route._tag) {
+    case "preflight":
+      return preflightCorsResponse(request, corsPolicy);
+    case "public":
+      return applyCors(request, makePublicResponse(route.path), corsPolicy);
+    case "scoped":
+      return undefined;
+  }
+}
+
+function makePublicResponse(path: "/" | "/health" | "/hello") {
+  if (path === "/health") {
+    return Response.json({
+      ok: true,
+      service: "ceird-api",
+      status: "healthy",
     });
-    options.waitUntil(dispose);
+  }
+
+  return Response.json({
+    ok: true,
+    message: "Hello from an Effect HttpApi on Cloudflare Workers.",
+    stage: "dummy",
+  });
+}
+
+async function disposeScopedRequestRuntime(options: {
+  readonly api: { readonly dispose: () => Promise<void> };
+  readonly db: Parameters<typeof closeApiDb>[0];
+  readonly backgroundTasks: ReadonlyArray<Promise<unknown>>;
+}) {
+  await waitForRequestBackgroundTasks(options.backgroundTasks);
+
+  try {
+    await options.api.dispose();
+  } catch (cause) {
+    console.warn("API request router disposal failed.", {
+      error: cause instanceof Error ? cause.name : "UnknownError",
+    });
+  } finally {
+    try {
+      await closeApiDb(options.db);
+    } catch (cause) {
+      console.warn("API request database pool close failed.", {
+        error: cause instanceof Error ? cause.name : "UnknownError",
+      });
+    }
   }
 }

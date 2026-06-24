@@ -13,8 +13,6 @@ export const forwardedApiHeaderNames = [
   "x-b3-traceid",
 ] as const;
 
-const betterAuthSessionCookieSuffix = "better-auth.session_token";
-
 export function withForwardedApiHeaders(
   outgoingHeaders: Headers,
   incomingHeaders?: IncomingApiHeaders,
@@ -36,13 +34,6 @@ export function withForwardedApiHeaders(
     }
   }
 
-  const authCookieHeader = selectBetterAuthCookieHeader(
-    incomingHeaders.get("cookie"),
-  );
-  if (authCookieHeader !== undefined && !headers.has("cookie")) {
-    headers.set("cookie", authCookieHeader);
-  }
-
   return headers;
 }
 
@@ -59,22 +50,4 @@ export function makeApiWorkerFetch(
 
     return apiWorker.fetch(new Request(request, { headers }));
   };
-}
-
-export function selectBetterAuthCookieHeader(
-  cookieHeader: string | null,
-): string | undefined {
-  if (cookieHeader === null) {
-    return undefined;
-  }
-
-  const authCookies = cookieHeader
-    .split(";")
-    .map((cookie) => cookie.trim())
-    .filter((cookie) => {
-      const name = cookie.split("=", 1)[0];
-      return name?.endsWith(betterAuthSessionCookieSuffix) ?? false;
-    });
-
-  return authCookies.length === 0 ? undefined : authCookies.join("; ");
 }

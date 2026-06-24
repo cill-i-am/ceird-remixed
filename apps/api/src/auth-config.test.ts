@@ -18,17 +18,45 @@ test("auth config rejects wildcard trusted origins", () => {
   );
 });
 
-test("auth config rejects non-HTTPS trusted origins except local loopback", () => {
+test("auth config rejects non-HTTPS trusted origins in deployed config", () => {
   assert.throws(
     () => parseOriginList("http://evil.example"),
     /must use https/,
   );
-  assert.deepEqual(parseOriginList("http://localhost:3000"), [
+  assert.throws(
+    () => parseOriginList("http://localhost:3000"),
+    /must use https/,
+  );
+  assert.throws(
+    () => parseOriginList("http://127.0.0.1:3000"),
+    /must use https/,
+  );
+  assert.throws(
+    () => parseOriginList("http://[::1]:3000"),
+    /must use https/,
+  );
+});
+
+test("auth config accepts local HTTP loopback only for local dev", () => {
+  assert.deepEqual(parseOriginList("http://localhost:3000", {
+    allowLocalHttp: true,
+  }), [
     "http://localhost:3000",
   ]);
-  assert.deepEqual(parseOriginList("http://127.0.0.1:3000"), [
+  assert.deepEqual(parseOriginList("http://127.0.0.1:3000", {
+    allowLocalHttp: true,
+  }), [
     "http://127.0.0.1:3000",
   ]);
+  assert.deepEqual(parseOriginList("http://[::1]:3000", {
+    allowLocalHttp: true,
+  }), [
+    "http://[::1]:3000",
+  ]);
+  assert.throws(
+    () => parseOriginList("http://evil.example", { allowLocalHttp: true }),
+    /must use https/,
+  );
 });
 
 test("auth config rejects wildcard allowed hosts", () => {

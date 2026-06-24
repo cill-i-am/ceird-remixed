@@ -12,7 +12,7 @@ export type ApiDb = NodePgDatabase<typeof relations> & {
 const databaseConnectionTimeoutMillis = 3_000;
 const databaseQueryTimeoutMillis = 3_000;
 const databaseIdleTimeoutMillis = 10_000;
-const databasePoolMaxConnections = 5;
+const databasePoolMaxConnections = 1;
 
 export function makeApiDb(
   connectionString: Redacted.Redacted<string>,

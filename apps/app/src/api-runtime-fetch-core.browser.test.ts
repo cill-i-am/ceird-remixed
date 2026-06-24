@@ -2,7 +2,6 @@ import { describe, expect, test } from "vitest";
 import {
   forwardedApiHeaderNames,
   makeApiWorkerFetch,
-  selectBetterAuthCookieHeader,
   withForwardedApiHeaders,
 } from "./api-runtime-fetch-core";
 
@@ -60,7 +59,6 @@ describe("makeApiWorkerFetch", () => {
   test("does not broadly forward request cookies to the API worker", () => {
     expect(forwardedApiHeaderNames).not.toContain("cookie");
   });
-
 });
 
 describe("withForwardedApiHeaders", () => {
@@ -82,14 +80,15 @@ describe("withForwardedApiHeaders", () => {
     expect(headers.get("traceparent")).toBe("api-traceparent");
   });
 
-  test("extracts only Better Auth session cookies", () => {
-    expect(
-      selectBetterAuthCookieHeader(
-        "theme=dark; better-auth.session_token=plain; __Secure-better-auth.session_token=secure; unrelated=value",
-      ),
-    ).toBe(
-      "better-auth.session_token=plain; __Secure-better-auth.session_token=secure",
+  test("does not forward Better Auth cookies from app-host SSR requests", () => {
+    const headers = withForwardedApiHeaders(
+      new Headers(),
+      new Headers({
+        cookie: "better-auth.session_token=app-host-cookie; theme=dark",
+      }),
     );
+
+    expect(headers.has("cookie")).toBe(false);
   });
 });
 

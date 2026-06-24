@@ -9,6 +9,9 @@ function getIncomingRequestHeaders() {
 
 export const runtimeApiFetchServer: typeof fetch = async (input, init) => {
   const incomingHeaders = getIncomingRequestHeaders();
+  // Better Auth cookies are host-only on the API origin in this slice, so SSR
+  // cannot authenticate by forwarding app-host cookies. Browser API calls use
+  // credentials: "include"; SSR calls may forward bearer auth in future flows.
   const apiWorkerFetch = makeApiWorkerFetch(env.API_WORKER, {
     incomingHeaders,
   });
