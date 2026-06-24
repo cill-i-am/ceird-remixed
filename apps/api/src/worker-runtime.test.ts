@@ -32,6 +32,28 @@ test("public and preflight requests skip scoped DB/Auth runtime construction", a
   });
 });
 
+test("unknown API requests skip scoped DB/Auth runtime construction", async () => {
+  const harness = makeWorkerRuntimeHarness();
+
+  const getResponse = await harness.fetch(
+    new Request("https://api-pr-12.ceird.app/does-not-exist"),
+  );
+  const postResponse = await harness.fetch(
+    new Request("https://api-pr-12.ceird.app/does-not-exist", {
+      method: "POST",
+    }),
+  );
+
+  assert.equal(getResponse.status, 404);
+  assert.equal(postResponse.status, 404);
+  assert.deepEqual(harness.calls(), {
+    db: 0,
+    auth: 0,
+    httpApi: 0,
+    close: 0,
+  });
+});
+
 test("auth routes skip Effect HttpApi router construction", async () => {
   const harness = makeWorkerRuntimeHarness();
 
@@ -106,6 +128,58 @@ test("request cleanup is bounded when DB close hangs", async () => {
     ),
     true,
   );
+});
+
+test("request cleanup keeps DB open until auth background tasks settle", async () => {
+  const events: Array<string> = [];
+  const harness = makeWorkerRuntimeHarness({
+    createAuth: () => ({
+      handler: () => {
+        runAuthBackgroundTask(
+          Promise.resolve().then(() => {
+            events.push("background-settled");
+          }),
+        );
+
+        return Promise.resolve(Response.json({ status: "ok" }));
+      },
+    }),
+    closeDb: () => {
+      events.push("db-close");
+      return Promise.resolve();
+    },
+  });
+
+  const response = await harness.fetch(
+    new Request("https://api-pr-12.ceird.app/api/auth/ok"),
+  );
+
+  assert.equal(response.status, 200);
+  await harness.waitForCleanup();
+  assert.deepEqual(events, ["background-settled", "db-close"]);
+});
+
+test("request cleanup does not block responses on delayed background tasks", async () => {
+  const delayed = deferred();
+  const harness = makeWorkerRuntimeHarness({
+    createAuth: () => ({
+      handler: () => {
+        runAuthBackgroundTask(delayed.promise);
+
+        return Promise.resolve(Response.json({ status: "ok" }));
+      },
+    }),
+  });
+
+  const response = await harness.fetchWithoutWaitingForCleanup(
+    new Request("https://api-pr-12.ceird.app/api/auth/ok"),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(harness.calls().close, 0);
+  delayed.resolve(undefined);
+  await harness.waitForCleanup();
+  assert.equal(harness.calls().close, 1);
 });
 
 test("request cleanup closes DB when auth construction throws", async () => {
@@ -225,6 +299,12 @@ function makeWorkerRuntimeHarness(options: HarnessOptions = {}) {
       await Promise.allSettled(cleanupTasks);
       return response;
     },
+    fetchWithoutWaitingForCleanup: (request: Request) =>
+      fetch(request, {
+        waitUntil: (promise) => {
+          cleanupTasks.push(promise);
+        },
+      }),
     waitForCleanup: async () => {
       await Promise.allSettled(cleanupTasks);
     },
@@ -236,4 +316,13 @@ function makeWorkerRuntimeHarness(options: HarnessOptions = {}) {
     }),
     warnings: () => warnings,
   };
+}
+
+function deferred<T = void>() {
+  let resolve: (value: T | PromiseLike<T>) => void = () => undefined;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+
+  return { promise, resolve };
 }

@@ -86,9 +86,23 @@ type AuthSessionReader = {
   };
 };
 
+export type BetterAuthHandler = {
+  readonly handler: (request: Request) => Promise<Response>;
+};
+
+export class AuthHandlerFailed extends Schema.TaggedErrorClass<AuthHandlerFailed>()(
+  "AuthHandlerFailed",
+  {
+    cause: Schema.Defect(),
+  },
+) {}
+
 export class Auth extends Context.Service<
   Auth,
   {
+    readonly handleAuthRequest: (
+      request: Request,
+    ) => Effect.Effect<Response, AuthHandlerFailed>;
     readonly requirePrincipal: (
       headers: Headers,
     ) => Effect.Effect<Principal, AuthError>;
@@ -153,8 +167,18 @@ export function createAuth(
 
 export type AuthInstance = ReturnType<typeof createAuth>;
 
-export const makeAuthLive = (auth: AuthSessionReader) =>
+export const handleBetterAuthRequest = Effect.fn("Auth.handleAuthRequest")(
+  function* (auth: BetterAuthHandler, request: Request) {
+    return yield* Effect.tryPromise({
+      try: () => auth.handler(request),
+      catch: (cause) => AuthHandlerFailed.make({ cause }),
+    });
+  },
+);
+
+export const makeAuthLive = (auth: AuthSessionReader & BetterAuthHandler) =>
   Layer.succeed(Auth)({
+    handleAuthRequest: (request) => handleBetterAuthRequest(auth, request),
     requirePrincipal: Effect.fn("Auth.requirePrincipal")(function* (headers) {
       if (!hasBetterAuthSessionCookie(headers)) {
         return yield* Effect.fail(

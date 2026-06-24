@@ -8,6 +8,14 @@ work:
   truth and migrations are generated through Drizzle Kit/Alchemy
   `Drizzle.Schema`. Before adding more tables, consider a deterministic CI
   check that reruns generation and fails on unexpected migration diffs.
+- **Better Auth Drizzle 1.x support:** this branch keeps Better Auth on the
+  Drizzle adapter and uses a narrow API-edge bridge so Better Auth can await
+  Alchemy's Effect-native Drizzle chains. As of the current package check,
+  `@better-auth/drizzle-adapter@1.6.20` still declares `drizzle-orm ^0.45.2`;
+  a later `1.7.0-beta.9` also declares `^0.45.2`, while the older wider beta
+  is not a stable support path. Revisit when Better Auth publishes a stable
+  Drizzle 1.x-compatible adapter, and do not introduce Kysely or another ORM as
+  a workaround in this greenfield app.
 - **Non-prod Neon topology:** each non-prod stage currently creates isolated
   Neon resources. That is simple for this auth slice, but can become expensive
   or quota-prone. Move dev/PR stages to branches under a shared non-prod Neon

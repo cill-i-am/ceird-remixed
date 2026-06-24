@@ -179,6 +179,7 @@ test("Auth service parses Better Auth cookies into a Principal", async () => {
 test("Auth service disables Better Auth session refresh for principal lookup", async () => {
   let disableRefresh: boolean | undefined;
   const authLive = makeAuthLive({
+    handler: () => Promise.resolve(new Response(null, { status: 404 })),
     api: {
       getSession: (options) => {
         disableRefresh = options.query?.disableRefresh;
@@ -209,6 +210,8 @@ test("Auth service disables Better Auth session refresh for principal lookup", a
 test("GET /me maps auth infrastructure lookup failures to 500", async () => {
   await using harness = await makeAuthFlowHarness({
     authLive: Layer.succeed(Auth)({
+      handleAuthRequest: () =>
+        Effect.succeed(new Response(null, { status: 404 })),
       requirePrincipal: () =>
         Effect.fail(
           AuthSessionLookupFailed.make({

@@ -40,3 +40,22 @@ test("API request routing keeps auth, protected, and DB routes scoped", () => {
     { _tag: "scoped" },
   );
 });
+
+test("API request routing rejects unknown and wrong-method routes cheaply", () => {
+  assert.deepEqual(
+    classifyApiRequest(new Request("https://api.ceird.app/does-not-exist")),
+    { _tag: "not-found" },
+  );
+  assert.deepEqual(
+    classifyApiRequest(new Request("https://api.ceird.app/does-not-exist", {
+      method: "POST",
+    })),
+    { _tag: "not-found" },
+  );
+  assert.deepEqual(
+    classifyApiRequest(new Request("https://api.ceird.app/me", {
+      method: "POST",
+    })),
+    { _tag: "method-not-allowed", allow: "GET" },
+  );
+});

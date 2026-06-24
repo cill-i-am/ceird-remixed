@@ -9,7 +9,12 @@ import * as HttpRouter from "effect/unstable/http/HttpRouter";
 import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 import * as HttpApiError from "effect/unstable/httpapi/HttpApiError";
-import { Auth, makeAuthLive, type AuthInstance } from "./auth.ts";
+import {
+  Auth,
+  handleBetterAuthRequest,
+  makeAuthLive,
+  type AuthInstance,
+} from "./auth.ts";
 import {
   applyCors,
   makeCorsPolicy,
@@ -205,8 +210,12 @@ async function handleAuthRequest(
   request: Request,
   url: URL,
 ) {
-  const response = await auth.handler(request).catch((cause: unknown) =>
-    makeAuthHandlerFailureResponse(cause)
+  const response = await Effect.runPromise(
+    handleBetterAuthRequest(auth, request).pipe(
+      Effect.catchTag("AuthHandlerFailed", (error) =>
+        Effect.succeed(makeAuthHandlerFailureResponse(error.cause))
+      ),
+    ),
   );
 
   if (url.pathname !== "/api/auth/ok" || response.status !== 200) {

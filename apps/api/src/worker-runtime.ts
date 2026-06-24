@@ -1,9 +1,6 @@
 import type * as Redacted from "effect/Redacted";
 import type { AuthConfig } from "./auth.ts";
-import {
-  runWithBackgroundTaskContext,
-  waitForRequestBackgroundTasks,
-} from "./background-tasks.ts";
+import { runWithBackgroundTaskContext } from "./background-tasks.ts";
 import {
   applyCors,
   preflightCorsResponse,
@@ -147,6 +144,24 @@ function handleRequestWithoutScopedRuntime(
       return preflightCorsResponse(request, corsPolicy);
     case "public":
       return applyCors(request, makePublicResponse(route.path), corsPolicy);
+    case "not-found":
+      return applyCors(
+        request,
+        Response.json({ error: "not_found" }, { status: 404 }),
+        corsPolicy,
+      );
+    case "method-not-allowed":
+      return applyCors(
+        request,
+        Response.json(
+          { error: "method_not_allowed" },
+          {
+            status: 405,
+            headers: { allow: route.allow },
+          },
+        ),
+        corsPolicy,
+      );
     case "scoped":
       return undefined;
   }
@@ -180,10 +195,7 @@ export async function disposeScopedRequestRuntime<TDb>(options: {
   ) => void;
 }) {
   const cleanupTimeoutMillis = options.cleanupTimeoutMillis ?? 1_000;
-  await waitForRequestBackgroundTasks(
-    options.backgroundTasks,
-    cleanupTimeoutMillis,
-  );
+  await Promise.allSettled(options.backgroundTasks);
 
   if (options.api !== undefined) {
     await waitForCleanupStep({

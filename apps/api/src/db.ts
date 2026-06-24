@@ -87,7 +87,7 @@ type ChainFunction = {
 
 type EffectRunner = <A, E>(effect: Effect.Effect<A, E, never>) => Promise<A>;
 
-function makePromiseAwaitableEffectDb<T extends object>(
+export function makePromiseAwaitableEffectDb<T extends object>(
   db: T,
   run: EffectRunner,
 ): T {
