@@ -21,12 +21,14 @@ import * as Schema from "effect/Schema";
 export class Principal extends Schema.Class<Principal>("Principal")({
   id: UserIdSchema,
   email: Schema.String,
+  emailVerified: Schema.Boolean,
   name: Schema.String,
 }) {
   toView() {
     return MeResponse.make({
       id: this.id,
       email: this.email,
+      emailVerified: this.emailVerified,
       name: this.name,
     });
   }

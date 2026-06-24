@@ -119,6 +119,7 @@ test("GET /me requires a valid Better Auth session and returns a typed principal
   assert.deepEqual(await authenticated.json(), {
     id: await harness.userIdByEmail("grace@example.com"),
     email: "grace@example.com",
+    emailVerified: false,
     name: "Grace Hopper",
   });
 });
@@ -141,6 +142,7 @@ test("Auth service parses Better Auth cookies into a Principal", async () => {
   );
 
   assert.equal(principal.email, "katherine@example.com");
+  assert.equal(principal.emailVerified, false);
   assert.equal(principal.name, "Katherine Johnson");
 });
 

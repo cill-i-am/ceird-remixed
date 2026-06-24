@@ -163,13 +163,36 @@ export function makeApiFetch(options: {
     }
 
     const url = new URL(requestWithHost.url);
-    const response = url.pathname === "/api/auth" ||
-      url.pathname.startsWith("/api/auth/")
+    const response = isAuthRoutePath(url.pathname)
       ? await handleAuthRequest(options.auth, requestWithHost, url)
       : await options.apiFetch(requestWithHost);
 
     return applyCors(requestWithHost, response, corsPolicy);
   };
+}
+
+export function makeAuthFetch(options: {
+  readonly auth: AuthHandler;
+  readonly corsPolicy?: CorsPolicy;
+}) {
+  const corsPolicy = options.corsPolicy ?? makeCorsPolicy();
+
+  return async (request: Request) => {
+    const requestWithHost = ensureHostHeader(request);
+
+    if (request.method === "OPTIONS") {
+      return preflightCorsResponse(requestWithHost, corsPolicy);
+    }
+
+    const url = new URL(requestWithHost.url);
+    const response = await handleAuthRequest(options.auth, requestWithHost, url);
+
+    return applyCors(requestWithHost, response, corsPolicy);
+  };
+}
+
+export function isAuthRoutePath(pathname: string) {
+  return pathname === "/api/auth" || pathname.startsWith("/api/auth/");
 }
 
 async function handleAuthRequest(

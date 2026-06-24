@@ -39,6 +39,7 @@ export type UserId = typeof UserIdSchema.Type;
 export class MeResponse extends Schema.Class<MeResponse>("MeResponse")({
   id: UserIdSchema,
   email: Schema.String,
+  emailVerified: Schema.Boolean,
   name: Schema.String,
 }) {}
 

@@ -16,3 +16,8 @@ infrastructure items remain intentional follow-ups before broad schema work:
   `production` environments. Configure preview Cloudflare, Neon, Better Auth,
   and GitHub credentials as least-privilege non-production credentials; do not
   reuse production secrets in the preview environment.
+- **DNS/domain cutover:** this branch intentionally uses `api.ceird.app` and
+  `app.ceird.app` for production, plus exact `api-<stage>.ceird.app` and
+  `app-<stage>.ceird.app` preview routes. Ensure the Cloudflare zone has the
+  matching proxied DNS/routes before deploy. A temporary
+  `remixed-api.ceird.app` compatibility alias is not included in this slice.
