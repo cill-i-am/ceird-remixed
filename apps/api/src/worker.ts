@@ -38,9 +38,11 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
   },
   Effect.gen(function* () {
     const hyperdrive = yield* Cloudflare.Hyperdrive.bind(ApiHyperdrive);
-    const stage = yield* Alchemy.Stage;
-    const alchemyContext = yield* Alchemy.AlchemyContext;
+    const stage = yield* Config.string("ALCHEMY_STAGE").pipe(
+      Effect.catch(() => Alchemy.Stage),
+    );
     const stageAuthConfig = makeStageAuthConfig(stage);
+    const allowLocalConfig = isLocalStage(stage);
     const authSecret = yield* Config.schema(
       BetterAuthSecretSchema,
       "BETTER_AUTH_SECRET",
@@ -54,14 +56,14 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
     const trustedOrigins = unique([
       stageAuthConfig.appOrigin,
       ...parseOriginList(Option.getOrUndefined(configuredTrustedOrigins), {
-        allowLocalHttp: alchemyContext.dev,
+        allowLocalHttp: allowLocalConfig,
       }),
     ]);
     const allowedHosts = unique(
       [
         stageAuthConfig.apiHost,
         ...parseHostList(Option.getOrUndefined(configuredAllowedHosts), {
-          allowLocalHosts: alchemyContext.dev,
+          allowLocalHosts: allowLocalConfig,
         }),
       ].map((host) => host.toLowerCase()),
     );
@@ -113,4 +115,8 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
 
 function unique(values: ReadonlyArray<string>): ReadonlyArray<string> {
   return [...new Set(values)];
+}
+
+function isLocalStage(stage: string) {
+  return stage === "dev" || stage === "test" || stage.startsWith("dev_");
 }
