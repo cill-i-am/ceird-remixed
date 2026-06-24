@@ -7,6 +7,8 @@ import * as Effect from "effect/Effect";
 const migrationsDir = "./packages/db/migrations";
 const schemaPath = "./packages/db/src/schema.ts";
 
+export const apiHyperdriveBindingName = "ApiHyperdrive";
+
 /** Neon Postgres project and branch for the API database. */
 export const ApiDatabase = Effect.gen(function* () {
   const stage = yield* Alchemy.Stage;

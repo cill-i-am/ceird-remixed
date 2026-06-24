@@ -20,11 +20,9 @@ import { createAuth } from "./auth.ts";
 import { runAuthBackgroundTask } from "./background-tasks.ts";
 import { makeCorsPolicy } from "./cors.ts";
 import { closeApiDb, makeApiDb, makeDbHealthLiveFromDb } from "./db.ts";
-import { ApiHyperdrive } from "./db-infra.ts";
+import { apiHyperdriveBindingName } from "./db-infra.ts";
 import { makeHttpApiFetch } from "./http.ts";
 import { makeWorkerFetch } from "./worker-runtime.ts";
-
-const apiHyperdriveBindingName = "ApiHyperdrive";
 
 const RuntimeHyperdriveBindingSchema = Schema.Struct({
   connectionString: Schema.String,
@@ -39,9 +37,6 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
   {
     main: import.meta.filename,
     url: true,
-    env: {
-      ApiHyperdrive,
-    },
     compatibility: {
       flags: ["nodejs_compat"],
     },

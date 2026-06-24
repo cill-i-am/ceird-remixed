@@ -9,6 +9,10 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { makeStageAuthConfig } from "./apps/api/src/auth-config.ts";
+import {
+  ApiHyperdrive,
+  apiHyperdriveBindingName,
+} from "./apps/api/src/db-infra.ts";
 import ApiWorker from "./apps/api/src/worker.ts";
 import { LocalServiceOriginSchema } from "./scripts/local-dev/topology.ts";
 
@@ -29,6 +33,26 @@ export default Alchemy.Stack(
     const stage = yield* Alchemy.Stage;
     const stageAuthConfig = makeStageAuthConfig(stage);
     const api = yield* ApiWorker;
+    const apiHyperdrive = yield* ApiHyperdrive;
+    yield* api.bind(apiHyperdriveBindingName, {
+      bindings: [
+        {
+          type: "hyperdrive",
+          name: apiHyperdriveBindingName,
+          id: apiHyperdrive.hyperdriveId,
+        },
+      ],
+      hyperdrives: Cloudflare.getHyperdriveDevOrigin(apiHyperdrive),
+    });
+    yield* api.bind("ALCHEMY_STAGE", {
+      bindings: [
+        {
+          type: "plain_text",
+          name: "ALCHEMY_STAGE",
+          text: stage,
+        },
+      ],
+    });
     const alchemyContext = yield* Alchemy.AlchemyContext;
     const localOriginConfig = Config.all({
       api: Config.schema(
