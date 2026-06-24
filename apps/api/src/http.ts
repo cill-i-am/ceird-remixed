@@ -18,6 +18,8 @@ import {
 } from "./cors.ts";
 import { DbHealth } from "./db-health.ts";
 
+export type AuthHandler = Pick<AuthInstance, "handler">;
+
 const helloResponse = HelloResponse.make({
   ok: true,
   message: "Hello from an Effect HttpApi on Cloudflare Workers.",
@@ -147,7 +149,7 @@ export function makeHttpApiFetch(options: {
 }
 
 export function makeApiFetch(options: {
-  readonly auth: AuthInstance;
+  readonly auth: AuthHandler;
   readonly apiFetch: (request: Request) => Promise<Response>;
   readonly corsPolicy?: CorsPolicy;
 }) {
@@ -171,15 +173,12 @@ export function makeApiFetch(options: {
 }
 
 async function handleAuthRequest(
-  auth: AuthInstance,
+  auth: AuthHandler,
   request: Request,
   url: URL,
 ) {
-  const response = await auth.handler(request).catch(() =>
-    Response.json(
-      { error: "invalid_auth_request" },
-      { status: 400 },
-    )
+  const response = await auth.handler(request).catch((cause: unknown) =>
+    makeAuthHandlerFailureResponse(cause)
   );
 
   if (url.pathname !== "/api/auth/ok" || response.status !== 200) {
@@ -193,6 +192,33 @@ async function handleAuthRequest(
       headers: response.headers,
     },
   );
+}
+
+function makeAuthHandlerFailureResponse(cause: unknown) {
+  if (isKnownBadAuthRequest(cause)) {
+    return Response.json(
+      { error: "invalid_auth_request" },
+      { status: 400 },
+    );
+  }
+
+  console.warn("Better Auth handler failed.", {
+    error: cause instanceof Error ? cause.name : "UnknownError",
+  });
+
+  return Response.json(
+    { error: "auth_handler_failed" },
+    { status: 500 },
+  );
+}
+
+function isKnownBadAuthRequest(cause: unknown) {
+  if (!(cause instanceof Error)) {
+    return false;
+  }
+
+  return cause.name === "BetterAuthError" &&
+    /allowed hosts|trusted origins|origin/i.test(cause.message);
 }
 
 function ensureHostHeader(request: Request) {

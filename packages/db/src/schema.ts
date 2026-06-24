@@ -69,14 +69,18 @@ export const account = pgTable(
   (table) => [index("account_user_id_idx").on(table.userId)],
 );
 
-export const verification = pgTable("verification", {
-  id: text("id").primaryKey(),
-  identifier: text("identifier").notNull(),
-  value: text("value").notNull(),
-  expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow(),
-});
+export const verification = pgTable(
+  "verification",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [index("verification_identifier_idx").on(table.identifier)],
+);
 
 export const rateLimit = pgTable(
   "rate_limit",

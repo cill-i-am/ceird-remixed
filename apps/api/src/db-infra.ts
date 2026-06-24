@@ -38,5 +38,8 @@ export const ApiHyperdrive = Effect.gen(function* () {
 
   return yield* Cloudflare.Hyperdrive("ApiHyperdrive", {
     origin: branch.origin,
+    caching: {
+      disabled: true,
+    },
   });
 });

@@ -18,6 +18,19 @@ test("auth config rejects wildcard trusted origins", () => {
   );
 });
 
+test("auth config rejects non-HTTPS trusted origins except local loopback", () => {
+  assert.throws(
+    () => parseOriginList("http://evil.example"),
+    /must use https/,
+  );
+  assert.deepEqual(parseOriginList("http://localhost:3000"), [
+    "http://localhost:3000",
+  ]);
+  assert.deepEqual(parseOriginList("http://127.0.0.1:3000"), [
+    "http://127.0.0.1:3000",
+  ]);
+});
+
 test("auth config rejects wildcard allowed hosts", () => {
   assert.throws(() => parseHostList("*.ceird.app"), /must be exact/);
   assert.throws(() => parseHostList("api?.ceird.app"), /must be exact/);

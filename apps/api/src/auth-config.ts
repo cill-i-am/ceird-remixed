@@ -47,6 +47,12 @@ export function parseOriginList(input: string | undefined): ReadonlyArray<string
 
     const parsed = new URL(origin);
 
+    if (parsed.protocol !== "https:" && !isLocalHttpOrigin(parsed)) {
+      throw new Error(
+        `CEIRD_AUTH_TRUSTED_ORIGINS must use https except loopback local origins: ${origin}`,
+      );
+    }
+
     if (
       parsed.username.length > 0 ||
       parsed.password.length > 0 ||
@@ -105,6 +111,13 @@ function splitConfigList(input: string | undefined): ReadonlyArray<string> {
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
+}
+
+function isLocalHttpOrigin(origin: URL) {
+  return origin.protocol === "http:" &&
+    (origin.hostname === "localhost" ||
+      origin.hostname === "127.0.0.1" ||
+      origin.hostname === "[::1]");
 }
 
 function makeStageHostSegment(stage: string) {

@@ -25,6 +25,29 @@ describe("runtimeApiFetch", () => {
       expect(calls).toHaveLength(1);
       expect(calls.at(0)?.url).toBe("https://api.test/health");
       expect(calls.at(0)?.headers.get("accept")).toBe("application/json");
+      expect(calls.at(0)?.credentials).toBe("include");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("preserves explicit browser fetch credentials", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: Array<Request> = [];
+
+    globalThis.fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      calls.push(request);
+
+      return new Response("ok");
+    };
+
+    try {
+      await runtimeApiFetch("https://api.test/health", {
+        credentials: "omit",
+      });
+
+      expect(calls.at(0)?.credentials).toBe("omit");
     } finally {
       globalThis.fetch = originalFetch;
     }

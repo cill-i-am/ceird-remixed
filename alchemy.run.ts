@@ -55,6 +55,8 @@ export default Alchemy.Stack(
       }).pipe(Alchemy.AdoptPolicy.adopt(true));
 
     if (zone !== undefined) {
+      // Stage routes rely on DNS for api-*.ceird.app and app-*.ceird.app being
+      // managed in the ceird.app Cloudflare zone.
       yield* Cloudflare.WorkerRoute("ApiRoute", {
         zoneId: zone.zoneId,
         pattern: `${stageAuthConfig.apiHost}/*`,

@@ -44,8 +44,8 @@ CREATE TABLE "verification" (
   "identifier" text NOT NULL,
   "value" text NOT NULL,
   "expires_at" timestamp NOT NULL,
-  "created_at" timestamp DEFAULT now(),
-  "updated_at" timestamp DEFAULT now()
+  "created_at" timestamp DEFAULT now() NOT NULL,
+  "updated_at" timestamp DEFAULT now() NOT NULL
 );
 
 CREATE TABLE "rate_limit" (
@@ -59,5 +59,6 @@ CREATE UNIQUE INDEX "user_email_unique" ON "user" USING btree ("email");
 CREATE UNIQUE INDEX "session_token_unique" ON "session" USING btree ("token");
 CREATE INDEX "session_user_id_idx" ON "session" USING btree ("user_id");
 CREATE INDEX "account_user_id_idx" ON "account" USING btree ("user_id");
+CREATE INDEX "verification_identifier_idx" ON "verification" USING btree ("identifier");
 CREATE UNIQUE INDEX "rate_limit_key_unique" ON "rate_limit" USING btree ("key");
 CREATE INDEX "rate_limit_last_request_idx" ON "rate_limit" USING btree ("last_request");

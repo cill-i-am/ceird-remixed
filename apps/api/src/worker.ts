@@ -4,6 +4,7 @@ import { WorkerExecutionContext } from "alchemy/Cloudflare/Workers";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import type * as Redacted from "effect/Redacted";
 import * as HttpEffect from "effect/unstable/http/HttpEffect";
 import {
   BetterAuthSecretSchema,
@@ -16,8 +17,8 @@ import {
   runAuthBackgroundTask,
   runWithBackgroundTaskContext,
 } from "./background-tasks.ts";
-import { makeCorsPolicy } from "./cors.ts";
-import { makeApiDb, makeDbHealthLiveFromDb } from "./db.ts";
+import { makeCorsPolicy, type CorsPolicy } from "./cors.ts";
+import { closeApiDb, makeApiDb, makeDbHealthLiveFromDb } from "./db.ts";
 import { ApiHyperdrive } from "./db-infra.ts";
 import { makeHttpApiFetch } from "./http.ts";
 
@@ -64,37 +65,22 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
     const corsPolicy = makeCorsPolicy({
       credentialedOrigins: trustedOrigins,
     });
-    const runtime = yield* Effect.cached(
-      Effect.gen(function* () {
-        const connectionString = yield* hyperdrive.connectionString;
-        const db = makeApiDb(connectionString);
-        const auth = createAuth(db, {
-          secret: authSecret,
-          trustedOrigins,
-          allowedHosts,
-          protocol: "https",
-          useSecureCookies: true,
-          backgroundTaskHandler: runAuthBackgroundTask,
-        });
-
-        return makeHttpApiFetch({
-          auth,
-          dbHealthLive: makeDbHealthLiveFromDb(db),
-          corsPolicy,
-        });
-      }),
-    );
 
     return {
       fetch: Effect.gen(function* () {
         const executionContext = yield* WorkerExecutionContext;
-        const api = yield* runtime;
+        const connectionString = yield* hyperdrive.connectionString;
 
         return yield* HttpEffect.fromWebHandler((request) =>
-          runWithBackgroundTaskContext(
-            { waitUntil: (promise) => executionContext.waitUntil(promise) },
-            () => api.fetch(request),
-          )
+          handleRequestWithScopedRuntime({
+            request,
+            connectionString,
+            authSecret,
+            trustedOrigins,
+            allowedHosts,
+            corsPolicy,
+            waitUntil: (promise) => executionContext.waitUntil(promise),
+          })
         );
       }),
     };
@@ -103,4 +89,48 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
 
 function unique(values: ReadonlyArray<string>): ReadonlyArray<string> {
   return [...new Set(values)];
+}
+
+async function handleRequestWithScopedRuntime(options: {
+  readonly request: Request;
+  readonly connectionString: Redacted.Redacted<string>;
+  readonly authSecret: Redacted.Redacted<string>;
+  readonly trustedOrigins: ReadonlyArray<string>;
+  readonly allowedHosts: ReadonlyArray<string>;
+  readonly corsPolicy: CorsPolicy;
+  readonly waitUntil: (promise: Promise<unknown>) => void;
+}) {
+  const backgroundTasks: Array<Promise<unknown>> = [];
+  const db = makeApiDb(options.connectionString);
+  const auth = createAuth(db, {
+    secret: options.authSecret,
+    trustedOrigins: options.trustedOrigins,
+    allowedHosts: options.allowedHosts,
+    protocol: "https",
+    useSecureCookies: true,
+    backgroundTaskHandler: runAuthBackgroundTask,
+  });
+  const api = makeHttpApiFetch({
+    auth,
+    dbHealthLive: makeDbHealthLiveFromDb(db),
+    corsPolicy: options.corsPolicy,
+  });
+
+  try {
+    return await runWithBackgroundTaskContext(
+      {
+        waitUntil: (promise) => {
+          backgroundTasks.push(promise);
+          options.waitUntil(promise);
+        },
+      },
+      () => api.fetch(options.request),
+    );
+  } finally {
+    const dispose = Promise.allSettled(backgroundTasks).then(async () => {
+      await api.dispose();
+      await closeApiDb(db);
+    });
+    options.waitUntil(dispose);
+  }
 }

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   forwardedApiHeaderNames,
   makeApiWorkerFetch,
+  selectBetterAuthCookieHeader,
   withForwardedApiHeaders,
 } from "./api-runtime-fetch-core";
 
@@ -56,9 +57,10 @@ describe("makeApiWorkerFetch", () => {
     expect(request.headers.get("x-b3-traceid")).toBe("incoming-trace-id");
   });
 
-  test("does not forward request cookies to the API worker", () => {
+  test("does not broadly forward request cookies to the API worker", () => {
     expect(forwardedApiHeaderNames).not.toContain("cookie");
   });
+
 });
 
 describe("withForwardedApiHeaders", () => {
@@ -78,6 +80,16 @@ describe("withForwardedApiHeaders", () => {
     expect(headers.get("authorization")).toBe("Bearer api-token");
     expect(headers.get("b3")).toBe("incoming-b3");
     expect(headers.get("traceparent")).toBe("api-traceparent");
+  });
+
+  test("extracts only Better Auth session cookies", () => {
+    expect(
+      selectBetterAuthCookieHeader(
+        "theme=dark; better-auth.session_token=plain; __Secure-better-auth.session_token=secure; unrelated=value",
+      ),
+    ).toBe(
+      "better-auth.session_token=plain; __Secure-better-auth.session_token=secure",
+    );
   });
 });
 

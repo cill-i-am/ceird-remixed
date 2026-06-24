@@ -17,9 +17,8 @@ const databasePoolMaxConnections = 5;
 export function makeApiDb(
   connectionString: Redacted.Redacted<string>,
 ): ApiDb {
-  // Cloudflare isolates may be reused across requests; keep the pool small and
-  // bound both connection acquisition and statements so stalled queries cannot
-  // occupy every Hyperdrive-backed slot indefinitely.
+  // Keep the pool small and bound both connection acquisition and statements so
+  // stalled queries cannot occupy every Hyperdrive-backed slot indefinitely.
   return drizzle({
     connection: {
       connectionString: Redacted.value(connectionString),
@@ -31,6 +30,10 @@ export function makeApiDb(
     },
     relations,
   });
+}
+
+export async function closeApiDb(db: ApiDb) {
+  await db.$client.end();
 }
 
 type DrizzleHealthDb<TResult> = {
