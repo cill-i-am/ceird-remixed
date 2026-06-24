@@ -64,6 +64,32 @@ test("auth config rejects wildcard allowed hosts", () => {
   assert.throws(() => parseHostList("api?.ceird.app"), /must be exact/);
 });
 
+test("auth config rejects local allowed hosts in deployed config", () => {
+  assert.throws(() => parseHostList("localhost"), /local hosts/);
+  assert.throws(() => parseHostList("127.0.0.1:8787"), /local hosts/);
+  assert.throws(() => parseHostList("[::1]:8787"), /local hosts/);
+  assert.throws(() => parseHostList("http://api.ceird.app"), /must use https/);
+});
+
+test("auth config accepts local allowed hosts only for local dev", () => {
+  assert.deepEqual(parseHostList("localhost", { allowLocalHosts: true }), [
+    "localhost",
+  ]);
+  assert.deepEqual(parseHostList("127.0.0.1:8787", {
+    allowLocalHosts: true,
+  }), [
+    "127.0.0.1:8787",
+  ]);
+  assert.deepEqual(parseHostList("[::1]:8787", { allowLocalHosts: true }), [
+    "[::1]:8787",
+  ]);
+  assert.deepEqual(parseHostList("http://localhost:8787", {
+    allowLocalHosts: true,
+  }), [
+    "localhost:8787",
+  ]);
+});
+
 test("stage auth config returns exact production origins", () => {
   assert.deepEqual(makeStageAuthConfig("prod"), {
     apiHost: "api.ceird.app",

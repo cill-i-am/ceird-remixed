@@ -71,6 +71,21 @@ export type AuthConfig = {
   readonly backgroundTaskHandler?: (promise: Promise<unknown>) => void;
 };
 
+type AuthSessionLookupOptions = {
+  readonly headers: Headers;
+  readonly query?: {
+    readonly disableRefresh?: boolean;
+  };
+};
+
+type AuthSessionReader = {
+  readonly api: {
+    readonly getSession: (
+      options: AuthSessionLookupOptions,
+    ) => Promise<unknown>;
+  };
+};
+
 export class Auth extends Context.Service<
   Auth,
   {
@@ -138,7 +153,7 @@ export function createAuth(
 
 export type AuthInstance = ReturnType<typeof createAuth>;
 
-export const makeAuthLive = (auth: AuthInstance) =>
+export const makeAuthLive = (auth: AuthSessionReader) =>
   Layer.succeed(Auth)({
     requirePrincipal: Effect.fn("Auth.requirePrincipal")(function* (headers) {
       if (!hasBetterAuthSessionCookie(headers)) {
@@ -148,7 +163,11 @@ export const makeAuthLive = (auth: AuthInstance) =>
       }
 
       const sessionResult = yield* Effect.tryPromise({
-        try: () => auth.api.getSession({ headers }),
+        try: () =>
+          auth.api.getSession({
+            headers,
+            query: { disableRefresh: true },
+          }),
         catch: (cause) =>
           AuthSessionLookupFailed.make({
             message: "Unable to look up Better Auth session.",

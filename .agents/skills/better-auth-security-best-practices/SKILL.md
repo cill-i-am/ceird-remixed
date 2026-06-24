@@ -3,6 +3,13 @@ name: better-auth-security-best-practices
 description: Configure rate limiting, manage auth secrets, set up CSRF protection, define trusted origins, secure sessions and cookies, encrypt OAuth tokens, track IP addresses, and implement audit logging for Better Auth. Use when users need to secure their auth setup, prevent brute force attacks, or harden a Better Auth deployment.
 ---
 
+# Ceird Repo Override
+
+This pnpm monorepo uses Better Auth only at the API/auth boundary. Use `pnpm`
+for all commands. Auth tables, rate-limit tables, and migrations are owned by
+Drizzle in `@ceird/db`; do not introduce Better Auth runtime migrations or a
+separate auth database migration flow.
+
 ## Secret Management
 
 ### Configuring the Secret

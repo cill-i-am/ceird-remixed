@@ -16,9 +16,9 @@
       "types": "./src/relations.ts",
       "import": "./src/relations.ts"
     },
-    "./types": {
-      "types": "./src/types.ts",
-      "import": "./src/types.ts"
+    "./effect-schema": {
+      "types": "./src/effect-schema.ts",
+      "import": "./src/effect-schema.ts"
     }
   },
   "publishConfig": {
@@ -35,23 +35,26 @@
         "types": "./dist/relations.d.ts",
         "import": "./dist/relations.js"
       },
-      "./types": {
-        "types": "./dist/types.d.ts",
-        "import": "./dist/types.js"
+      "./effect-schema": {
+        "types": "./dist/effect-schema.d.ts",
+        "import": "./dist/effect-schema.js"
       }
     }
   },
   "scripts": {
     "build": "tsdown",
     "check": "tsc --noEmit",
-    "generate": "drizzle-kit generate --config drizzle.config.ts"
+    "generate": "drizzle-kit generate --config drizzle.config.ts",
+    "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "drizzle-orm": "1.0.0-rc.3"
+    "drizzle-orm": "1.0.0-rc.3",
+    "effect": "4.0.0-beta.85"
   },
   "devDependencies": {
     "drizzle-kit": "1.0.0-rc.3",
     "tsdown": "^0.22.3",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }
 }

@@ -111,6 +111,36 @@ test("request cleanup is bounded when DB close hangs", async () => {
   );
 });
 
+test("request cleanup closes DB when auth construction throws", async () => {
+  const harness = makeWorkerRuntimeHarness({
+    createAuth: () => {
+      throw new Error("synthetic auth construction failure");
+    },
+  });
+
+  await assert.rejects(
+    () => harness.fetch(new Request("https://api-pr-12.ceird.app/me")),
+    /synthetic auth construction failure/,
+  );
+  await harness.waitForCleanup();
+  assert.equal(harness.calls().close, 1);
+});
+
+test("request cleanup closes DB when HttpApi construction throws", async () => {
+  const harness = makeWorkerRuntimeHarness({
+    makeHttpApiFetch: () => {
+      throw new Error("synthetic router construction failure");
+    },
+  });
+
+  await assert.rejects(
+    () => harness.fetch(new Request("https://api-pr-12.ceird.app/me")),
+    /synthetic router construction failure/,
+  );
+  await harness.waitForCleanup();
+  assert.equal(harness.calls().close, 1);
+});
+
 type RuntimeCalls = {
   readonly connectionString: number;
   readonly db: number;
@@ -128,6 +158,11 @@ type HarnessOptions = {
   readonly cleanupTimeoutMillis?: number;
   readonly dispose?: () => Promise<void>;
   readonly closeDb?: () => Promise<void>;
+  readonly createAuth?: () => AuthHandler;
+  readonly makeHttpApiFetch?: () => {
+    readonly fetch: (request: Request) => Promise<Response>;
+    readonly dispose: () => Promise<void>;
+  };
 };
 
 function makeWorkerRuntimeHarness(options: HarnessOptions = {}) {
@@ -170,11 +205,11 @@ function makeWorkerRuntimeHarness(options: HarnessOptions = {}) {
       },
       createAuth: () => {
         authCalls += 1;
-        return fakeAuth;
+        return options.createAuth?.() ?? fakeAuth;
       },
       makeHttpApiFetch: () => {
         httpApiCalls += 1;
-        return {
+        return options.makeHttpApiFetch?.() ?? {
           fetch: () => Promise.resolve(Response.json({ route: "http-api" })),
           dispose: options.dispose ?? (() => Promise.resolve()),
         };

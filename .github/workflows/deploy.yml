@@ -50,6 +50,11 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Check Drizzle migration drift
+        run: |
+          pnpm --filter @ceird/db generate
+          git diff --exit-code -- packages/db/migrations packages/db/src/schema.ts packages/db/drizzle.config.ts
+
   deploy:
     name: Deploy
     needs: checks

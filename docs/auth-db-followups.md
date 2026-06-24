@@ -12,6 +12,11 @@ work:
   Neon resources. That is simple for this auth slice, but can become expensive
   or quota-prone. Move dev/PR stages to branches under a shared non-prod Neon
   project once the shared project lifecycle and cleanup policy are agreed.
+- **Request-scoped HttpApi construction:** Better Auth routes skip the Effect
+  HttpApi router, but protected non-auth API routes still build the router and
+  layers per request. Keep this acceptable for the first slice; revisit a safe
+  hoist or cached-router design once there are enough protected routes to
+  measure.
 - **Preview deploy credentials:** GitHub Actions uses separate `preview` and
   `production` environments. Configure preview Cloudflare, Neon, Better Auth,
   and GitHub credentials as least-privilege non-production credentials; do not

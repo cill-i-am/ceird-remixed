@@ -3,6 +3,13 @@ name: email-and-password-best-practices
 description: Configure email verification, implement password reset flows, set password policies, and customise hashing algorithms for Better Auth email/password authentication. Use when users need to set up login, sign-in, sign-up, credential authentication, or password security with Better Auth.
 ---
 
+# Ceird Repo Override
+
+Use `pnpm` only. Email/password auth lives in the API Better Auth runtime, but
+Drizzle in `@ceird/db` owns all auth schema and migrations. When this skill says
+to run Better Auth CLI migrations, translate that into updating Drizzle schema
+and generating reviewed Drizzle migrations instead.
+
 ## Quick Start
 
 1. Enable email/password: `emailAndPassword: { enabled: true }`

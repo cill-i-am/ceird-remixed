@@ -30,6 +30,35 @@ const handlers = HttpApiBuilder.group(Api, "Meta", (group) =>
   Effect.gen(function* () {
     const dbHealth = yield* DbHealth;
     const auth = yield* Auth;
+    const requirePrincipalForRequest = (
+      request: HttpServerRequest.HttpServerRequest,
+    ) =>
+      auth.requirePrincipal(new Headers(request.headers)).pipe(
+        Effect.catchTag(
+          "Unauthenticated",
+          () => Effect.fail(new HttpApiError.Unauthorized({})),
+        ),
+        Effect.catchTag("AuthSessionLookupFailed", (error) =>
+          Effect.logWarning(
+            "Authenticated principal lookup failed.",
+            "error:",
+            error._tag,
+          ).pipe(
+            Effect.andThen(() =>
+              Effect.fail(new HttpApiError.InternalServerError({}))),
+          ),
+        ),
+        Effect.catchTag("AuthSessionParseFailed", (error) =>
+          Effect.logWarning(
+            "Authenticated principal parse failed.",
+            "error:",
+            error._tag,
+          ).pipe(
+            Effect.andThen(() =>
+              Effect.fail(new HttpApiError.InternalServerError({}))),
+          ),
+        ),
+      );
 
     return group
       .handle("health", () =>
@@ -42,55 +71,31 @@ const handlers = HttpApiBuilder.group(Api, "Meta", (group) =>
         ),
       )
       .handle("dbHealth", () =>
-        dbHealth.check().pipe(
-          Effect.tapError((error) =>
-            Effect.logWarning(
-              "Database health check failed.",
-              "operation:",
-              error.operation,
+        Effect.gen(function* () {
+          const request = yield* HttpServerRequest.HttpServerRequest;
+          yield* requirePrincipalForRequest(request);
+
+          return yield* dbHealth.check().pipe(
+            Effect.tapError((error) =>
+              Effect.logWarning(
+                "Database health check failed.",
+                "operation:",
+                error.operation,
+              ),
             ),
-          ),
-          Effect.catchTag(
-            "DbHealthCheckFailed",
-            () => Effect.fail(new HttpApiError.ServiceUnavailable({})),
-          ),
-        ),
+            Effect.catchTag(
+              "DbHealthCheckFailed",
+              () => Effect.fail(new HttpApiError.ServiceUnavailable({})),
+            ),
+          );
+        }),
       )
       .handle("root", () => Effect.succeed(helloResponse))
       .handle("hello", () => Effect.succeed(helloResponse))
       .handle("me", () =>
         Effect.gen(function* () {
           const request = yield* HttpServerRequest.HttpServerRequest;
-          const principal = yield* auth
-            .requirePrincipal(new Headers(request.headers))
-            .pipe(
-              Effect.catchTag(
-                "Unauthenticated",
-                () => Effect.fail(new HttpApiError.Unauthorized({})),
-              ),
-              Effect.catchTag("AuthSessionLookupFailed", (error) =>
-                Effect.logWarning(
-                  "Authenticated principal lookup failed.",
-                  "error:",
-                  error._tag,
-                ).pipe(
-                  Effect.andThen(() =>
-                    Effect.fail(new HttpApiError.InternalServerError({})),
-                  ),
-                ),
-              ),
-              Effect.catchTag("AuthSessionParseFailed", (error) =>
-                Effect.logWarning(
-                  "Authenticated principal parse failed.",
-                  "error:",
-                  error._tag,
-                ).pipe(
-                  Effect.andThen(() =>
-                    Effect.fail(new HttpApiError.InternalServerError({})),
-                  ),
-                ),
-              ),
-            );
+          const principal = yield* requirePrincipalForRequest(request);
 
           return principal.toView();
         }),

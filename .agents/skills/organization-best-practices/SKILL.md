@@ -3,6 +3,13 @@ name: organization-best-practices
 description: Configure multi-tenant organizations, manage members and invitations, define custom roles and permissions, set up teams, and implement RBAC using Better Auth's organization plugin. Use when users need org setup, team management, member roles, access control, or the Better Auth organization plugin.
 ---
 
+# Ceird Repo Override
+
+Use `pnpm` only. Organization auth is not part of the first auth slice. When it
+is added, Better Auth may provide runtime behavior, but Drizzle in `@ceird/db`
+must own the organization schema and generated migrations. Do not run Better
+Auth runtime migrations as production flow.
+
 ## Setup
 
 1. Add `organization()` plugin to server config

@@ -91,26 +91,28 @@ async function handleRequestWithScopedRuntime<TDb, TAuth extends AuthHandler>(
   const backgroundTasks: Array<Promise<unknown>> = [];
   const connectionString = await options.deps.getConnectionString();
   const db = options.deps.makeDb(connectionString);
-  const auth = options.deps.createAuth(db, {
-    secret: options.config.authSecret,
-    trustedOrigins: options.config.trustedOrigins,
-    allowedHosts: options.config.allowedHosts,
-    protocol: options.config.protocol,
-    useSecureCookies: options.config.useSecureCookies,
-    backgroundTaskHandler: options.deps.backgroundTaskHandler,
-  });
-  const pathname = new URL(options.request.url).pathname;
-  const api = isAuthRoutePath(pathname)
-    ? undefined
-    : options.deps.makeHttpApiFetch({
-        auth,
-        db,
-        corsPolicy: options.config.corsPolicy,
-      });
-  const fetch = api?.fetch ??
-    makeAuthFetch({ auth, corsPolicy: options.config.corsPolicy });
+  let api: HttpApiRuntime | undefined;
 
   try {
+    const auth = options.deps.createAuth(db, {
+      secret: options.config.authSecret,
+      trustedOrigins: options.config.trustedOrigins,
+      allowedHosts: options.config.allowedHosts,
+      protocol: options.config.protocol,
+      useSecureCookies: options.config.useSecureCookies,
+      backgroundTaskHandler: options.deps.backgroundTaskHandler,
+    });
+    const pathname = new URL(options.request.url).pathname;
+    api = isAuthRoutePath(pathname)
+      ? undefined
+      : options.deps.makeHttpApiFetch({
+          auth,
+          db,
+          corsPolicy: options.config.corsPolicy,
+        });
+    const fetch = api?.fetch ??
+      makeAuthFetch({ auth, corsPolicy: options.config.corsPolicy });
+
     return await runWithBackgroundTaskContext(
       {
         waitUntil: (promise) => {

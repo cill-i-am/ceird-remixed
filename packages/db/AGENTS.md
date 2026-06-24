@@ -8,6 +8,16 @@ These instructions apply to `packages/db/*` and refine the repository root
 - Treat Drizzle schema files in this package as the source of truth for the
   database contract. Better Auth and API runtime code consume this schema; they
   must not own a separate database or migration universe.
+- Derive row-shaped Effect Schemas from Drizzle tables with
+  `drizzle-orm/effect-schema`. Do not duplicate Effect Schema definitions for
+  select, insert, or update shapes that mirror database rows. Hand-written
+  Effect Schemas remain appropriate for domain models and public view models
+  when they intentionally differ from table shape.
+- When first-party API/database services grow beyond the Better Auth adapter,
+  use `drizzle-orm/effect-postgres` for Effect-native Postgres access behind
+  the app's DB service boundary. Better Auth may keep the regular Drizzle
+  adapter it requires, but application services should not scatter raw
+  promise-based driver access through Effect handlers.
 - Generate migrations from Drizzle schema with Drizzle Kit or Alchemy
   `Drizzle.Schema`. Commit the generated migration SQL together with Drizzle
   snapshot metadata so future changes can be diffed from the schema history.

@@ -51,7 +51,11 @@ export const Api = HttpApi.make("CeirdApi").add(
     }),
     HttpApiEndpoint.get("dbHealth", "/db/health", {
       success: DbHealthResponse,
-      error: HttpApiError.ServiceUnavailable,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.InternalServerError,
+        HttpApiError.ServiceUnavailable,
+      ],
     }),
     HttpApiEndpoint.get("root", "/", {
       success: HelloResponse,

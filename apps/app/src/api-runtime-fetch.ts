@@ -9,10 +9,12 @@ const getRuntimeApiFetchServer = createIsomorphicFn().server(async () => {
 export const runtimeApiFetch: typeof fetch = async (input, init) => {
   if (typeof window !== "undefined") {
     const request = new Request(input, init);
+    const credentials = init?.credentials ??
+      (input instanceof Request ? input.credentials : "include");
 
     return fetch(
       new Request(request, {
-        credentials: init?.credentials ?? "include",
+        credentials,
       }),
     );
   }

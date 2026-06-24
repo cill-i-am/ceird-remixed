@@ -60,7 +60,9 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
     const allowedHosts = unique(
       [
         stageAuthConfig.apiHost,
-        ...parseHostList(Option.getOrUndefined(configuredAllowedHosts)),
+        ...parseHostList(Option.getOrUndefined(configuredAllowedHosts), {
+          allowLocalHosts: alchemyContext.dev,
+        }),
       ].map((host) => host.toLowerCase()),
     );
     const corsPolicy = makeCorsPolicy({

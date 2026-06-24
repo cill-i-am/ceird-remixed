@@ -75,7 +75,10 @@ export function parseOriginList(
   });
 }
 
-export function parseHostList(input: string | undefined): ReadonlyArray<string> {
+export function parseHostList(
+  input: string | undefined,
+  options: { readonly allowLocalHosts?: boolean } = {},
+): ReadonlyArray<string> {
   return splitConfigList(input).map((host) => {
     if (wildcardPattern.test(host)) {
       throw new Error(
@@ -84,6 +87,22 @@ export function parseHostList(input: string | undefined): ReadonlyArray<string> 
     }
 
     const parsed = new URL(host.includes("://") ? host : `https://${host}`);
+    if (
+      parsed.protocol !== "https:" &&
+      !(options.allowLocalHosts === true && isLocalHost(parsed.hostname))
+    ) {
+      throw new Error(
+        `CEIRD_AUTH_ALLOWED_HOSTS must use https when a protocol is provided: ${host}`,
+      );
+    }
+    if (
+      options.allowLocalHosts !== true &&
+      isLocalHost(parsed.hostname)
+    ) {
+      throw new Error(
+        `CEIRD_AUTH_ALLOWED_HOSTS cannot contain local hosts in deployed config: ${host}`,
+      );
+    }
 
     if (
       parsed.username.length > 0 ||
@@ -121,9 +140,13 @@ function splitConfigList(input: string | undefined): ReadonlyArray<string> {
 
 function isLocalHttpOrigin(origin: URL) {
   return origin.protocol === "http:" &&
-    (origin.hostname === "localhost" ||
-      origin.hostname === "127.0.0.1" ||
-      origin.hostname === "[::1]");
+    isLocalHost(origin.hostname);
+}
+
+function isLocalHost(hostname: string) {
+  return hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]";
 }
 
 function makeStageHostSegment(stage: string) {

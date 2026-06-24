@@ -3,6 +3,14 @@ name: better-auth-best-practices
 description: Configure Better Auth server and client, set up database adapters, manage sessions, add plugins, and handle environment variables. Use when users mention Better Auth, betterauth, auth.ts, or need to set up TypeScript authentication with email/password, OAuth, or plugin configuration.
 ---
 
+# Ceird Repo Override
+
+This pnpm monorepo uses Better Auth only as the API/auth-layer runtime.
+Ignore upstream `npm`/`npx` workflow snippets in this skill: use `pnpm` and
+repo scripts. Drizzle in `@ceird/db` owns schema and migrations. Do not use
+Better Auth runtime migrations as the production migration path; generate and
+review Drizzle migrations from `packages/db/src/schema.ts` instead.
+
 # Better Auth Integration Guide
 
 **Always consult [better-auth.com/docs](https://better-auth.com/docs) for code examples and latest API.**

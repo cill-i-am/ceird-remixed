@@ -2,7 +2,7 @@ import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { Auth, AuthSessionLookupFailed } from "./auth.ts";
+import { Auth, AuthSessionLookupFailed, makeAuthLive } from "./auth.ts";
 import { makeStageAuthConfig } from "./auth-config.ts";
 import { isAllowedCredentialedOrigin, makeCorsPolicy } from "./cors.ts";
 import { makeAuthFlowHarness } from "./test/auth-flow-harness.ts";
@@ -124,6 +124,36 @@ test("GET /me requires a valid Better Auth session and returns a typed principal
   });
 });
 
+test("GET /db/health requires a valid Better Auth session", async () => {
+  await using harness = await makeAuthFlowHarness();
+
+  const anonymous = await harness.fetch(
+    new Request("http://localhost/db/health"),
+  );
+  assert.equal(anonymous.status, 401);
+
+  const cookie = await harness.signUpAndReadCookie({
+    email: "db-health@example.com",
+    password: "correct horse battery staple",
+    name: "DB Health",
+  });
+  const authenticated = await harness.fetch(
+    new Request("http://localhost/db/health", {
+      headers: { cookie },
+    }),
+  );
+
+  assert.equal(authenticated.status, 200);
+  assert.deepEqual(await authenticated.json(), {
+    ok: true,
+    service: "ceird-api",
+    database: {
+      provider: "neon-postgres",
+      transport: "cloudflare-hyperdrive",
+    },
+  });
+});
+
 test("Auth service parses Better Auth cookies into a Principal", async () => {
   await using harness = await makeAuthFlowHarness();
 
@@ -144,6 +174,36 @@ test("Auth service parses Better Auth cookies into a Principal", async () => {
   assert.equal(principal.email, "katherine@example.com");
   assert.equal(principal.emailVerified, false);
   assert.equal(principal.name, "Katherine Johnson");
+});
+
+test("Auth service disables Better Auth session refresh for principal lookup", async () => {
+  let disableRefresh: boolean | undefined;
+  const authLive = makeAuthLive({
+    api: {
+      getSession: (options) => {
+        disableRefresh = options.query?.disableRefresh;
+        return Promise.resolve({
+          user: {
+            id: "readonly_user",
+            email: "readonly@example.com",
+            emailVerified: true,
+            name: "Read Only",
+          },
+        });
+      },
+    },
+  });
+
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const auth = yield* Auth;
+      return yield* auth.requirePrincipal(
+        new Headers({ cookie: "better-auth.session_token=test" }),
+      );
+    }).pipe(Effect.provide(authLive)),
+  );
+
+  assert.equal(disableRefresh, true);
 });
 
 test("GET /me maps auth infrastructure lookup failures to 500", async () => {

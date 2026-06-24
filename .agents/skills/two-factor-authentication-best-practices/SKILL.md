@@ -3,6 +3,13 @@ name: two-factor-authentication-best-practices
 description: Configure TOTP authenticator apps, send OTP codes via email/SMS, manage backup codes, handle trusted devices, and implement 2FA sign-in flows using Better Auth's twoFactor plugin. Use when users need MFA, multi-factor authentication, authenticator setup, or login security with Better Auth.
 ---
 
+# Ceird Repo Override
+
+Use `pnpm` only. Two-factor auth is not part of the first auth slice. When it is
+added, Better Auth may provide runtime behavior, but Drizzle in `@ceird/db`
+must own the 2FA schema and generated migrations. Do not run Better Auth
+runtime migrations as production flow.
+
 ## Setup
 
 1. Add `twoFactor()` plugin to server config with `issuer`
