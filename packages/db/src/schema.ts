@@ -9,6 +9,11 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+const timestampWithTimezone = {
+  mode: "date",
+  withTimezone: true,
+} as const;
+
 export const user = pgTable(
   "user",
   {
@@ -17,8 +22,12 @@ export const user = pgTable(
     email: text("email").notNull(),
     emailVerified: boolean("email_verified").notNull().default(false),
     image: text("image"),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
   },
   (table) => [uniqueIndex("user_email_unique").on(table.email)],
 );
@@ -27,10 +36,14 @@ export const session = pgTable(
   "session",
   {
     id: text("id").primaryKey(),
-    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+    expiresAt: timestamp("expires_at", timestampWithTimezone).notNull(),
     token: text("token").notNull(),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
     userId: text("user_id")
@@ -55,16 +68,22 @@ export const account = pgTable(
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     idToken: text("id_token"),
-    accessTokenExpiresAt: timestamp("access_token_expires_at", {
-      mode: "date",
-    }),
-    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
-      mode: "date",
-    }),
+    accessTokenExpiresAt: timestamp(
+      "access_token_expires_at",
+      timestampWithTimezone,
+    ),
+    refreshTokenExpiresAt: timestamp(
+      "refresh_token_expires_at",
+      timestampWithTimezone,
+    ),
     scope: text("scope"),
     password: text("password"),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
   },
   (table) => [index("account_user_id_idx").on(table.userId)],
 );
@@ -75,9 +94,13 @@ export const verification = pgTable(
     id: text("id").primaryKey(),
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
-    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", timestampWithTimezone).notNull(),
+    createdAt: timestamp("created_at", timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
