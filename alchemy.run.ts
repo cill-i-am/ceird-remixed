@@ -44,15 +44,6 @@ export default Alchemy.Stack(
       ],
       hyperdrives: Cloudflare.getHyperdriveDevOrigin(apiHyperdrive),
     });
-    yield* api.bind("ALCHEMY_STAGE", {
-      bindings: [
-        {
-          type: "plain_text",
-          name: "ALCHEMY_STAGE",
-          text: stage,
-        },
-      ],
-    });
     const alchemyContext = yield* Alchemy.AlchemyContext;
     const localOriginConfig = Config.all({
       api: Config.schema(
