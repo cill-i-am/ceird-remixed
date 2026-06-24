@@ -1,13 +1,20 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
+import * as Drizzle from "alchemy/Drizzle";
 import * as Neon from "alchemy/Neon";
 import * as Effect from "effect/Effect";
 
 const migrationsDir = "./packages/db/migrations";
+const schemaPath = "./packages/db/src/schema.ts";
 
 /** Neon Postgres project and branch for the API database. */
 export const ApiDatabase = Effect.gen(function* () {
   const stage = yield* Alchemy.Stage;
+  const schema = yield* Drizzle.Schema("ApiDatabaseSchema", {
+    schema: schemaPath,
+    out: migrationsDir,
+    dialect: "postgres",
+  });
 
   const project =
     stage === "prod"
@@ -24,7 +31,7 @@ export const ApiDatabase = Effect.gen(function* () {
   const branch = yield* Neon.Branch("ApiDatabaseBranch", {
     project,
     protected: stage === "prod",
-    migrationsDir,
+    migrationsDir: schema.out,
   });
 
   // Future cost optimization: use one shared non-prod Neon project and create

@@ -150,13 +150,33 @@ export async function makeAuthFlowHarness(options?: {
 }
 
 async function applyMigration(client: PGlite) {
-  const migrationPath = path.resolve(
+  const migrationsRoot = path.resolve(
     path.dirname(url.fileURLToPath(import.meta.url)),
-    "../../../../packages/db/migrations/0000_better_auth.sql",
+    "../../../../packages/db/migrations",
   );
-  const migration = await fs.readFile(migrationPath, "utf8");
+  const migrationPaths = await listMigrationSqlFiles(migrationsRoot);
 
-  await client.exec(migration);
+  for (const migrationPath of migrationPaths) {
+    const migration = await fs.readFile(migrationPath, "utf8");
+    await client.exec(migration);
+  }
+}
+
+async function listMigrationSqlFiles(directory: string): Promise<Array<string>> {
+  const entries = await fs.readdir(directory, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(directory, entry.name);
+
+      if (entry.isDirectory()) {
+        return listMigrationSqlFiles(entryPath);
+      }
+
+      return entry.isFile() && entry.name.endsWith(".sql") ? [entryPath] : [];
+    }),
+  );
+
+  return files.flat().sort((left, right) => left.localeCompare(right));
 }
 
 async function assertAuthTablesExist(client: PGlite) {

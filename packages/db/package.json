@@ -43,12 +43,14 @@
   },
   "scripts": {
     "build": "tsdown",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "generate": "drizzle-kit generate --config drizzle.config.ts"
   },
   "dependencies": {
     "drizzle-orm": "1.0.0-rc.3"
   },
   "devDependencies": {
+    "drizzle-kit": "1.0.0-rc.3",
     "tsdown": "^0.22.3",
     "typescript": "^6.0.3"
   }
