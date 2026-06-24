@@ -83,15 +83,14 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
             useSecureCookies: true,
           },
           deps: {
-            getConnectionString: () =>
-              Effect.runPromise(
+            makeDb: () =>
+              makeApiDb(
                 hyperdrive.connectionString.pipe(
                   Effect.provideService(RuntimeContext, runtimeContext),
                 ),
               ),
-            makeDb: makeApiDb,
             closeDb: closeApiDb,
-            createAuth,
+            createAuth: (db, config) => createAuth(db.authDb, config),
             makeHttpApiFetch: ({ auth, db, corsPolicy }) =>
               makeHttpApiFetch({
                 auth,

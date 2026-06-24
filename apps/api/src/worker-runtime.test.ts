@@ -25,7 +25,6 @@ test("public and preflight requests skip scoped DB/Auth runtime construction", a
   assert.equal(publicResponse.status, 200);
   assert.equal(preflightResponse.status, 204);
   assert.deepEqual(harness.calls(), {
-    connectionString: 0,
     db: 0,
     auth: 0,
     httpApi: 0,
@@ -43,7 +42,6 @@ test("auth routes skip Effect HttpApi router construction", async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: "ok" });
   assert.deepEqual(harness.calls(), {
-    connectionString: 1,
     db: 1,
     auth: 1,
     httpApi: 0,
@@ -61,7 +59,6 @@ test("scoped Effect routes use request-scoped DB/Auth/HttpApi runtime", async ()
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { route: "http-api" });
   assert.deepEqual(harness.calls(), {
-    connectionString: 1,
     db: 1,
     auth: 1,
     httpApi: 1,
@@ -142,7 +139,6 @@ test("request cleanup closes DB when HttpApi construction throws", async () => {
 });
 
 type RuntimeCalls = {
-  readonly connectionString: number;
   readonly db: number;
   readonly auth: number;
   readonly httpApi: number;
@@ -166,7 +162,6 @@ type HarnessOptions = {
 };
 
 function makeWorkerRuntimeHarness(options: HarnessOptions = {}) {
-  let connectionStringCalls = 0;
   let dbCalls = 0;
   let authCalls = 0;
   let httpApiCalls = 0;
@@ -191,13 +186,9 @@ function makeWorkerRuntimeHarness(options: HarnessOptions = {}) {
       useSecureCookies: true,
     },
     deps: {
-      getConnectionString: () => {
-        connectionStringCalls += 1;
-        return Promise.resolve(Redacted.make("postgres://example"));
-      },
       makeDb: () => {
         dbCalls += 1;
-        return fakeDb;
+        return Promise.resolve(fakeDb);
       },
       closeDb: () => {
         closeCalls += 1;
@@ -238,7 +229,6 @@ function makeWorkerRuntimeHarness(options: HarnessOptions = {}) {
       await Promise.allSettled(cleanupTasks);
     },
     calls: (): RuntimeCalls => ({
-      connectionString: connectionStringCalls,
       db: dbCalls,
       auth: authCalls,
       httpApi: httpApiCalls,

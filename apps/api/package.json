@@ -13,11 +13,9 @@
     "alchemy": "2.0.0-beta.57",
     "better-auth": "^1.6.1",
     "drizzle-orm": "1.0.0-rc.3",
-    "effect": "4.0.0-beta.85",
-    "pg": "^8.22.0"
+    "effect": "4.0.0-beta.85"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.3.14",
-    "@types/pg": "^8.20.0"
+    "@electric-sql/pglite": "^0.3.14"
   }
 }

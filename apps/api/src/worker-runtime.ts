@@ -37,8 +37,7 @@ export type WorkerFetchOptions = {
 export type CleanupWarningFields = Readonly<Record<string, string>>;
 
 export type WorkerRuntimeDeps<TDb, TAuth extends AuthHandler> = {
-  readonly getConnectionString: () => Promise<Redacted.Redacted<string>>;
-  readonly makeDb: (connectionString: Redacted.Redacted<string>) => TDb;
+  readonly makeDb: () => Promise<TDb>;
   readonly closeDb: (db: TDb) => Promise<void>;
   readonly createAuth: (db: TDb, config: AuthConfig) => TAuth;
   readonly makeHttpApiFetch: (options: {
@@ -89,8 +88,7 @@ async function handleRequestWithScopedRuntime<TDb, TAuth extends AuthHandler>(
   },
 ) {
   const backgroundTasks: Array<Promise<unknown>> = [];
-  const connectionString = await options.deps.getConnectionString();
-  const db = options.deps.makeDb(connectionString);
+  const db = await options.deps.makeDb();
   let api: HttpApiRuntime | undefined;
 
   try {
