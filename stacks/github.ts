@@ -25,6 +25,10 @@ export default Alchemy.Stack(
           effect: "allow",
           permissionGroups: [
             "Workers Scripts Write",
+            "Workers Routes Read",
+            "Workers Routes Write",
+            "Hyperdrive Read",
+            "Hyperdrive Write",
             "Account Settings Write",
             "Secrets Store Write",
             "Workers Tail Read",
