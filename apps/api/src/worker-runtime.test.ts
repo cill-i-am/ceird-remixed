@@ -25,6 +25,7 @@ test("public and preflight requests skip scoped DB/Auth runtime construction", a
   assert.equal(publicResponse.status, 200);
   assert.equal(preflightResponse.status, 204);
   assert.deepEqual(harness.calls(), {
+    authConfig: 0,
     db: 0,
     auth: 0,
     httpApi: 0,
@@ -47,6 +48,7 @@ test("unknown API requests skip scoped DB/Auth runtime construction", async () =
   assert.equal(getResponse.status, 404);
   assert.equal(postResponse.status, 404);
   assert.deepEqual(harness.calls(), {
+    authConfig: 0,
     db: 0,
     auth: 0,
     httpApi: 0,
@@ -64,6 +66,7 @@ test("auth routes skip Effect HttpApi router construction", async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: "ok" });
   assert.deepEqual(harness.calls(), {
+    authConfig: 1,
     db: 1,
     auth: 1,
     httpApi: 0,
@@ -81,6 +84,7 @@ test("scoped Effect routes use request-scoped DB/Auth/HttpApi runtime", async ()
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { route: "http-api" });
   assert.deepEqual(harness.calls(), {
+    authConfig: 1,
     db: 1,
     auth: 1,
     httpApi: 1,
@@ -213,6 +217,7 @@ test("request cleanup closes DB when HttpApi construction throws", async () => {
 });
 
 type RuntimeCalls = {
+  readonly authConfig: number;
   readonly db: number;
   readonly auth: number;
   readonly httpApi: number;
@@ -227,6 +232,13 @@ type RuntimeWarning = {
 type HarnessOptions = {
   readonly cleanupTimeoutMillis?: number;
   readonly dispose?: () => Promise<void>;
+  readonly makeAuthConfig?: () => Promise<{
+    readonly secret: Redacted.Redacted<string>;
+    readonly trustedOrigins: ReadonlyArray<string>;
+    readonly allowedHosts: ReadonlyArray<string>;
+    readonly protocol: "http" | "https";
+    readonly useSecureCookies: boolean;
+  }>;
   readonly closeDb?: () => Promise<void>;
   readonly createAuth?: () => AuthHandler;
   readonly makeHttpApiFetch?: () => {
@@ -236,6 +248,7 @@ type HarnessOptions = {
 };
 
 function makeWorkerRuntimeHarness(options: HarnessOptions = {}) {
+  let authConfigCalls = 0;
   let dbCalls = 0;
   let authCalls = 0;
   let httpApiCalls = 0;
@@ -248,18 +261,25 @@ function makeWorkerRuntimeHarness(options: HarnessOptions = {}) {
   };
   const fetch = makeWorkerFetch({
     config: {
-      authSecret: Redacted.make(
-        "local-test-secret-at-least-thirty-two-characters",
-      ),
-      trustedOrigins: ["https://app-pr-12.ceird.app"],
-      allowedHosts: ["api-pr-12.ceird.app"],
       corsPolicy: makeCorsPolicy({
         credentialedOrigins: ["https://app-pr-12.ceird.app"],
       }),
-      protocol: "https",
-      useSecureCookies: true,
     },
     deps: {
+      makeAuthConfig: () => {
+        authConfigCalls += 1;
+
+        return options.makeAuthConfig?.() ??
+          Promise.resolve({
+            secret: Redacted.make(
+              "local-test-secret-at-least-thirty-two-characters",
+            ),
+            trustedOrigins: ["https://app-pr-12.ceird.app"],
+            allowedHosts: ["api-pr-12.ceird.app"],
+            protocol: "https",
+            useSecureCookies: true,
+          });
+      },
       makeDb: () => {
         dbCalls += 1;
         return Promise.resolve(fakeDb);
@@ -309,6 +329,7 @@ function makeWorkerRuntimeHarness(options: HarnessOptions = {}) {
       await Promise.allSettled(cleanupTasks);
     },
     calls: (): RuntimeCalls => ({
+      authConfig: authConfigCalls,
       db: dbCalls,
       auth: authCalls,
       httpApi: httpApiCalls,

@@ -1,4 +1,3 @@
-import type * as Redacted from "effect/Redacted";
 import type { AuthConfig } from "./auth.ts";
 import { runWithBackgroundTaskContext } from "./background-tasks.ts";
 import {
@@ -14,12 +13,7 @@ import {
 import { classifyApiRequest } from "./request-routing.ts";
 
 export type WorkerRuntimeConfig = {
-  readonly authSecret: Redacted.Redacted<string>;
-  readonly trustedOrigins: ReadonlyArray<string>;
-  readonly allowedHosts: ReadonlyArray<string>;
   readonly corsPolicy: CorsPolicy;
-  readonly protocol: "http" | "https";
-  readonly useSecureCookies: boolean;
 };
 
 export type HttpApiRuntime = {
@@ -34,6 +28,7 @@ export type WorkerFetchOptions = {
 export type CleanupWarningFields = Readonly<Record<string, string>>;
 
 export type WorkerRuntimeDeps<TDb, TAuth extends AuthHandler> = {
+  readonly makeAuthConfig: () => Promise<AuthRuntimeConfig>;
   readonly makeDb: () => Promise<TDb>;
   readonly closeDb: (db: TDb) => Promise<void>;
   readonly createAuth: (db: TDb, config: AuthConfig) => TAuth;
@@ -49,6 +44,8 @@ export type WorkerRuntimeDeps<TDb, TAuth extends AuthHandler> = {
     fields: CleanupWarningFields,
   ) => void;
 };
+
+type AuthRuntimeConfig = Omit<AuthConfig, "backgroundTaskHandler">;
 
 export function makeWorkerFetch<TDb, TAuth extends AuthHandler>(options: {
   readonly config: WorkerRuntimeConfig;
@@ -84,17 +81,14 @@ async function handleRequestWithScopedRuntime<TDb, TAuth extends AuthHandler>(
     readonly deps: WorkerRuntimeDeps<TDb, TAuth>;
   },
 ) {
+  const authConfig = await options.deps.makeAuthConfig();
   const backgroundTasks: Array<Promise<unknown>> = [];
   const db = await options.deps.makeDb();
   let api: HttpApiRuntime | undefined;
 
   try {
     const auth = options.deps.createAuth(db, {
-      secret: options.config.authSecret,
-      trustedOrigins: options.config.trustedOrigins,
-      allowedHosts: options.config.allowedHosts,
-      protocol: options.config.protocol,
-      useSecureCookies: options.config.useSecureCookies,
+      ...authConfig,
       backgroundTaskHandler: options.deps.backgroundTaskHandler,
     });
     const pathname = new URL(options.request.url).pathname;

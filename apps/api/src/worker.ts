@@ -46,7 +46,7 @@ const ApiWorkerLive = ApiWorker.make(
     );
     const stageAuthConfig = makeStageAuthConfig(stage);
     const allowLocalConfig = isLocalStage(stage);
-    const authSecret = yield* Config.schema(
+    const authSecretConfig = Config.schema(
       BetterAuthSecretSchema,
       "BETTER_AUTH_SECRET",
     );
@@ -77,20 +77,33 @@ const ApiWorkerLive = ApiWorker.make(
     return {
       fetch: Effect.gen(function* () {
         const executionContext = yield* WorkerExecutionContext;
-        const hyperdriveConnectionString =
-          yield* apiHyperdrive.connectionString;
+        const runtimeContext = yield* Alchemy.RuntimeContext;
         const workerFetch = makeWorkerFetch({
           config: {
-            authSecret,
-            trustedOrigins,
-            allowedHosts,
             corsPolicy,
-            protocol: "https",
-            useSecureCookies: true,
           },
           deps: {
+            makeAuthConfig: () =>
+              Effect.runPromise(
+                Effect.gen(function* () {
+                  return {
+                    secret: yield* authSecretConfig,
+                    trustedOrigins,
+                    allowedHosts,
+                    protocol: "https" as const,
+                    useSecureCookies: true,
+                  };
+                }),
+              ),
             makeDb: () =>
-              makeApiDb(Effect.succeed(hyperdriveConnectionString)),
+              makeApiDb(
+                apiHyperdrive.connectionString.pipe(
+                  Effect.provideService(
+                    Alchemy.RuntimeContext,
+                    runtimeContext,
+                  ),
+                ),
+              ),
             closeDb: closeApiDb,
             createAuth: (db, config) => createAuth(db.authDb, config),
             makeHttpApiFetch: ({ auth, db, corsPolicy }) =>
