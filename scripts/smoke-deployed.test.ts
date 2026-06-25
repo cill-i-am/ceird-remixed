@@ -25,8 +25,10 @@ test("derives deployed smoke URLs from pull request stages", () => {
 
 test("allows explicit smoke URL overrides without a stage", () => {
   const config = resolveSmokeConfig({
-    API_URL: "http://127.0.0.1:8787",
-    APP_URL: "http://localhost:1338",
+    API_URL: "https://api-old.example.com",
+    APP_URL: "https://app-old.example.com",
+    SMOKE_API_URL: "http://127.0.0.1:8787",
+    SMOKE_APP_URL: "http://localhost:1338",
   });
 
   assert.equal(config.stage, "custom");
@@ -38,6 +40,13 @@ test("rejects smoke URLs that contain paths", () => {
   assert.throws(
     () => parseSmokeOrigin("https://api.ceird.app/health", "API_URL"),
     /origin, not a full URL path/u,
+  );
+});
+
+test("rejects non-local http smoke URLs", () => {
+  assert.throws(
+    () => parseSmokeOrigin("http://api.ceird.app", "API_URL"),
+    /https except loopback/u,
   );
 });
 
@@ -54,8 +63,8 @@ test("builds a Cookie header from Set-Cookie headers", () => {
 test("redacts auth tokens and cookies from failure previews", () => {
   assert.equal(
     redactSensitiveText(
-      '{"token":"secret-token","cookie":"better-auth.session_token=secret-cookie"}',
+      '{"token":"secret-token","password":"Smoke-test-password-12345!","cookie":"better-auth.session_token=secret-cookie"}',
     ),
-    '{"token":"[redacted]","cookie":"better-auth.[redacted]=[redacted]"}',
+    '{"token":"[redacted]","password":"[redacted-password]","cookie":"better-auth.[redacted]=[redacted]"}',
   );
 });

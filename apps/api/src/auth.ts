@@ -12,11 +12,16 @@ import {
 } from "@ceird/api-contract";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+
+const smokeTestUserEmailPrefix = "smoke+";
+const smokeTestUserEmailDomain = "@example.com";
+const smokeTestUserName = "Smoke Test";
 
 export class Principal extends Schema.Class<Principal>("Principal")({
   id: UserIdSchema,
@@ -139,6 +144,18 @@ export function createAuth(
     emailAndPassword: {
       enabled: true,
     },
+    user: {
+      deleteUser: {
+        enabled: true,
+        beforeDelete: async (user) => {
+          if (!isSmokeTestUser(user)) {
+            throw new APIError("FORBIDDEN", {
+              message: "Only smoke test users can be deleted by this route.",
+            });
+          }
+        },
+      },
+    },
     trustedOrigins: [...config.trustedOrigins],
     secret: Redacted.value(config.secret),
     advanced: {
@@ -220,6 +237,15 @@ export const makeAuthLive = (auth: AuthSessionReader & BetterAuthHandler) =>
 
 export function principalUserId(principal: Principal): UserId {
   return principal.id;
+}
+
+function isSmokeTestUser(user: {
+  readonly email: string;
+  readonly name: string;
+}) {
+  return user.email.startsWith(smokeTestUserEmailPrefix) &&
+    user.email.endsWith(smokeTestUserEmailDomain) &&
+    user.name === smokeTestUserName;
 }
 
 function hasBetterAuthSessionCookie(headers: Headers) {

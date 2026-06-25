@@ -104,6 +104,8 @@ jobs:
       - name: Smoke deployed stage
         run: pnpm run smoke:deployed
         env:
+          SMOKE_API_URL: ${{ vars.SMOKE_API_URL }}
+          SMOKE_APP_URL: ${{ vars.SMOKE_APP_URL }}
           STAGE: ${{ env.STAGE }}
 
   cleanup:

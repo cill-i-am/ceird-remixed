@@ -154,6 +154,49 @@ test("GET /db/health requires a valid Better Auth session", async () => {
   });
 });
 
+test("delete-user removes only disposable smoke test users", async () => {
+  await using harness = await makeAuthFlowHarness();
+  const password = "correct horse battery staple";
+  const smokeEmail = "smoke+cleanup@example.com";
+  const smokeCookie = await harness.signUpAndReadCookie({
+    email: smokeEmail,
+    password,
+    name: "Smoke Test",
+  });
+
+  const deleted = await harness.fetch(
+    jsonRequest("http://localhost/api/auth/delete-user", {
+      password,
+    }, {
+      cookie: smokeCookie,
+    }),
+  );
+
+  assert.equal(deleted.status, 200);
+  assert.deepEqual(await deleted.json(), {
+    success: true,
+    message: "User deleted",
+  });
+  assert.equal(await harness.userCountByEmail(smokeEmail), 0);
+
+  const ordinaryEmail = "ordinary-delete@example.com";
+  const ordinaryCookie = await harness.signUpAndReadCookie({
+    email: ordinaryEmail,
+    password,
+    name: "Ordinary User",
+  });
+  const rejected = await harness.fetch(
+    jsonRequest("http://localhost/api/auth/delete-user", {
+      password,
+    }, {
+      cookie: ordinaryCookie,
+    }),
+  );
+
+  assert.equal(rejected.status, 403);
+  assert.equal(await harness.userCountByEmail(ordinaryEmail), 1);
+});
+
 test("Auth service parses Better Auth cookies into a Principal", async () => {
   await using harness = await makeAuthFlowHarness();
 
