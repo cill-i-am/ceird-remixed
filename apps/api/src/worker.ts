@@ -41,9 +41,8 @@ const ApiWorkerLive = ApiWorker.make(
   },
   Effect.gen(function* () {
     const apiHyperdrive = yield* Cloudflare.Hyperdrive.bind(ApiHyperdrive);
-    const stage = yield* Config.string("ALCHEMY_STAGE").pipe(
-      Effect.catch(() => Alchemy.Stage),
-    );
+    const stack = yield* Alchemy.Stack;
+    const stage = stack.stage;
     const stageAuthConfig = makeStageAuthConfig(stage);
     const allowLocalConfig = isLocalStage(stage);
     const authSecretConfig = Config.schema(
