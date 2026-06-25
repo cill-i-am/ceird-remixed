@@ -18,6 +18,7 @@
     "alchemy:destroy": "pnpm exec alchemy destroy alchemy.run.ts",
     "opensrc:effect": "./scripts/ensure-effect-source.sh",
     "postinstall": "./scripts/ensure-effect-source.sh",
+    "smoke:deployed": "tsx scripts/smoke-deployed.ts",
     "test": "pnpm run test:scripts && pnpm -r --if-present test",
     "test:scripts": "tsx --test \"scripts/**/*.test.ts\""
   },

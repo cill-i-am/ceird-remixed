@@ -101,6 +101,11 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           PULL_REQUEST: ${{ github.event_name == 'pull_request' && github.event.number || '' }}
 
+      - name: Smoke deployed stage
+        run: pnpm run smoke:deployed
+        env:
+          STAGE: ${{ env.STAGE }}
+
   cleanup:
     name: Cleanup PR Stage
     if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository }}
