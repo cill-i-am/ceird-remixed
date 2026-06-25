@@ -15,7 +15,7 @@ const healthyResponseBody = {
   service: "ceird-api",
   status: "healthy",
 };
-const testApiBaseUrl = parseApiBaseUrl("http://api.test");
+const testApiBaseUrl = parseApiBaseUrl("https://api.test");
 const testApiHealthUrl = new URL("/health", testApiBaseUrl).href;
 
 describe("apiQueries.meta.health", () => {

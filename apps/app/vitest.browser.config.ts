@@ -15,6 +15,7 @@ export default defineConfig({
     ],
     include: [
       "@tanstack/start-fn-stubs",
+      "better-auth/react",
       "effect/unstable/http/HttpClientResponse",
     ],
   },
