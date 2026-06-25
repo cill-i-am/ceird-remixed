@@ -1,9 +1,13 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
-import { WorkerExecutionContext } from "alchemy/Cloudflare/Workers";
+import {
+  WorkerEnvironment,
+  WorkerExecutionContext,
+} from "alchemy/Cloudflare/Workers";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
 import * as HttpEffect from "effect/unstable/http/HttpEffect";
 import {
   BetterAuthSecretSchema,
@@ -40,7 +44,18 @@ const ApiWorkerLive = ApiWorker.make(
     },
   },
   Effect.gen(function* () {
-    const apiHyperdrive = yield* Cloudflare.Hyperdrive.bind(ApiHyperdrive);
+    const alchemyPhase = yield* Config.string("ALCHEMY_PHASE").pipe(
+      Config.withDefault("runtime"),
+    );
+    // Bind during Alchemy planning; runtime reads the provided Worker env.
+    if (alchemyPhase === "plan") {
+      yield* Cloudflare.Hyperdrive.bind(ApiHyperdrive);
+    }
+
+    const workerEnvironment = yield* WorkerEnvironment;
+    const apiHyperdriveConnectionString = Effect.sync(
+      () => readApiHyperdriveConnectionString(workerEnvironment),
+    );
     const stack = yield* Alchemy.Stack;
     const stage = stack.stage;
     const stageAuthConfig = makeStageAuthConfig(stage);
@@ -76,7 +91,6 @@ const ApiWorkerLive = ApiWorker.make(
     return {
       fetch: Effect.gen(function* () {
         const executionContext = yield* WorkerExecutionContext;
-        const runtimeContext = yield* Alchemy.RuntimeContext;
         const workerFetch = makeWorkerFetch({
           config: {
             corsPolicy,
@@ -93,16 +107,9 @@ const ApiWorkerLive = ApiWorker.make(
                     useSecureCookies: true,
                   };
                 }),
-              ),
+            ),
             makeDb: () =>
-              makeApiDb(
-                apiHyperdrive.connectionString.pipe(
-                  Effect.provideService(
-                    Alchemy.RuntimeContext,
-                    runtimeContext,
-                  ),
-                ),
-              ),
+              makeApiDb(apiHyperdriveConnectionString),
             closeDb: closeApiDb,
             createAuth: (db, config) => createAuth(db.authDb, config),
             makeHttpApiFetch: ({ auth, db, corsPolicy }) =>
@@ -133,4 +140,34 @@ function unique(values: ReadonlyArray<string>): ReadonlyArray<string> {
 
 function isLocalStage(stage: string) {
   return stage === "dev" || stage === "test" || stage.startsWith("dev_");
+}
+
+type RuntimeHyperdriveBinding = {
+  readonly connectionString: string;
+};
+
+function readApiHyperdriveConnectionString(
+  env: unknown,
+): Redacted.Redacted<string> {
+  const binding = readProperty(env, "ApiHyperdrive");
+
+  if (!isRuntimeHyperdriveBinding(binding)) {
+    throw new Error("Missing ApiHyperdrive Worker binding.");
+  }
+
+  return Redacted.make(binding.connectionString);
+}
+
+function isRuntimeHyperdriveBinding(
+  value: unknown,
+): value is RuntimeHyperdriveBinding {
+  return typeof readProperty(value, "connectionString") === "string";
+}
+
+function readProperty(value: unknown, property: string): unknown {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+
+  return Object.getOwnPropertyDescriptor(value, property)?.value;
 }

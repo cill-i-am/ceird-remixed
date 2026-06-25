@@ -9,6 +9,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { makeStageAuthConfig } from "./apps/api/src/auth-config.ts";
+import { ApiHyperdrive } from "./apps/api/src/db-infra.ts";
 import ApiWorker from "./apps/api/src/worker.ts";
 import { LocalServiceOriginSchema } from "./scripts/local-dev/topology.ts";
 
@@ -28,6 +29,7 @@ export default Alchemy.Stack(
   Effect.gen(function* () {
     const stage = yield* Alchemy.Stage;
     const stageAuthConfig = makeStageAuthConfig(stage);
+    yield* ApiHyperdrive;
     const api = yield* ApiWorker;
     const alchemyContext = yield* Alchemy.AlchemyContext;
     const localOriginConfig = Config.all({
