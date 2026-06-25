@@ -19,7 +19,6 @@ import { createAuth } from "./auth.ts";
 import { runAuthBackgroundTask } from "./background-tasks.ts";
 import { makeCorsPolicy } from "./cors.ts";
 import { closeApiDb, makeApiDb, makeDbHealthLiveFromDb } from "./db.ts";
-import { ApiHyperdrive } from "./db-infra.ts";
 import { makeHttpApiFetch } from "./http.ts";
 import { makeWorkerFetch } from "./worker-runtime.ts";
 
@@ -42,16 +41,11 @@ const ApiWorkerLive = ApiWorker.make(
         invocationLogs: true,
       },
     },
+    env: {
+      ApiHyperdrive: Cloudflare.Hyperdrive.ref("ApiHyperdrive"),
+    },
   },
   Effect.gen(function* () {
-    const alchemyPhase = yield* Config.string("ALCHEMY_PHASE").pipe(
-      Config.withDefault("runtime"),
-    );
-    // Bind during Alchemy planning; runtime reads the provided Worker env.
-    if (alchemyPhase === "plan") {
-      yield* Cloudflare.Hyperdrive.bind(ApiHyperdrive);
-    }
-
     const workerEnvironment = yield* WorkerEnvironment;
     const apiHyperdriveConnectionString = Effect.sync(
       () => readApiHyperdriveConnectionString(workerEnvironment),
