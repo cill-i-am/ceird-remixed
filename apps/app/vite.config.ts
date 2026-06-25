@@ -16,6 +16,7 @@ export default defineConfig({
       "@base-ui/react/merge-props",
       "@base-ui/react/use-render",
     ],
+    include: ["better-auth/react"],
   },
   resolve: {
     dedupe: ["react", "react-dom"],
