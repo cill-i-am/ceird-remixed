@@ -29,7 +29,7 @@
     "@cloudflare/workers-types": "^4.20260619.1",
     "@effect/platform-node": "4.0.0-beta.85",
     "@types/node": "^26.0.0",
-    "alchemy": "2.0.0-beta.57",
+    "alchemy": "2.0.0-beta.58",
     "drizzle-kit": "1.0.0-rc.3",
     "opensrc": "^0.7.2",
     "portless": "^0.14.0",

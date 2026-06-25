@@ -10,7 +10,7 @@
     "@better-auth/drizzle-adapter": "^1.6.1",
     "@ceird/api-contract": "workspace:*",
     "@ceird/db": "workspace:*",
-    "alchemy": "2.0.0-beta.57",
+    "alchemy": "2.0.0-beta.58",
     "better-auth": "^1.6.1",
     "drizzle-orm": "1.0.0-rc.3",
     "effect": "4.0.0-beta.85",

@@ -1,14 +1,9 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
-import {
-  WorkerEnvironment,
-  WorkerExecutionContext,
-} from "alchemy/Cloudflare/Workers";
+import { WorkerExecutionContext } from "alchemy/Cloudflare/Workers";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import * as Redacted from "effect/Redacted";
-import * as Schema from "effect/Schema";
 import * as HttpEffect from "effect/unstable/http/HttpEffect";
 import {
   BetterAuthSecretSchema,
@@ -20,20 +15,16 @@ import { createAuth } from "./auth.ts";
 import { runAuthBackgroundTask } from "./background-tasks.ts";
 import { makeCorsPolicy } from "./cors.ts";
 import { closeApiDb, makeApiDb, makeDbHealthLiveFromDb } from "./db.ts";
-import { apiHyperdriveBindingName } from "./db-infra.ts";
+import { ApiHyperdrive } from "./db-infra.ts";
 import { makeHttpApiFetch } from "./http.ts";
 import { makeWorkerFetch } from "./worker-runtime.ts";
 
-const RuntimeHyperdriveBindingSchema = Schema.Struct({
-  connectionString: Schema.String,
-});
+export class ApiWorker extends Cloudflare.Worker<
+  ApiWorker,
+  Cloudflare.WorkerShape
+>()("Api") {}
 
-const decodeRuntimeHyperdriveBinding = Schema.decodeUnknownEffect(
-  RuntimeHyperdriveBindingSchema,
-);
-
-export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
-  "Api",
+const ApiWorkerLive = ApiWorker.make(
   {
     main: import.meta.filename,
     url: true,
@@ -49,6 +40,7 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
     },
   },
   Effect.gen(function* () {
+    const apiHyperdrive = yield* Cloudflare.Hyperdrive.bind(ApiHyperdrive);
     const stage = yield* Config.string("ALCHEMY_STAGE").pipe(
       Effect.catch(() => Alchemy.Stage),
     );
@@ -86,15 +78,7 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
       fetch: Effect.gen(function* () {
         const executionContext = yield* WorkerExecutionContext;
         const hyperdriveConnectionString =
-          yield* readApiHyperdriveConnectionString().pipe(
-            Effect.catch((cause) =>
-              Effect.die(
-                new Error("Missing or invalid ApiHyperdrive binding.", {
-                  cause,
-                }),
-              )
-            ),
-          );
+          yield* apiHyperdrive.connectionString;
         const workerFetch = makeWorkerFetch({
           config: {
             authSecret,
@@ -126,21 +110,10 @@ export default class ApiWorker extends Cloudflare.Worker<ApiWorker>()(
         });
       }),
     };
-  }),
-) {}
+  }).pipe(Effect.provide(Cloudflare.HyperdriveBindingLive)),
+);
 
-const readApiHyperdriveConnectionString = Effect.fn(
-  "ApiWorker.readApiHyperdriveConnectionString",
-)(function* () {
-  const env = yield* WorkerEnvironment;
-  const bindingInput = Object.getOwnPropertyDescriptor(
-    env,
-    apiHyperdriveBindingName,
-  )?.value;
-  const binding = yield* decodeRuntimeHyperdriveBinding(bindingInput);
-
-  return Redacted.make(binding.connectionString);
-});
+export default ApiWorker.pipe(Effect.provide(ApiWorkerLive));
 
 function unique(values: ReadonlyArray<string>): ReadonlyArray<string> {
   return [...new Set(values)];

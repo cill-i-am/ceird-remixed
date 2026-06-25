@@ -11,3 +11,4 @@ minimumReleaseAgeExclude:
   - effect@4.0.0-beta.85
   - '@effect/platform-node-shared@4.0.0-beta.85'
   - '@effect/platform-node@4.0.0-beta.85'
+  - alchemy@2.0.0-beta.58
