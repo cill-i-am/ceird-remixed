@@ -1,4 +1,5 @@
 import * as Alchemy from "alchemy";
+import type {} from "alchemy/Phase";
 import * as Cloudflare from "alchemy/Cloudflare";
 import {
   WorkerEnvironment,
@@ -19,6 +20,7 @@ import { createAuth } from "./auth.ts";
 import { runAuthBackgroundTask } from "./background-tasks.ts";
 import { makeCorsPolicy } from "./cors.ts";
 import { closeApiDb, makeApiDb, makeDbHealthLiveFromDb } from "./db.ts";
+import { ApiHyperdrive } from "./db-infra.ts";
 import { makeHttpApiFetch } from "./http.ts";
 import { makeWorkerFetch } from "./worker-runtime.ts";
 
@@ -28,23 +30,29 @@ export class ApiWorker extends Cloudflare.Worker<
 >()("Api") {}
 
 const ApiWorkerLive = ApiWorker.make(
-  {
-    main: import.meta.filename,
-    url: true,
-    compatibility: {
-      flags: ["nodejs_compat"],
-    },
-    observability: {
-      enabled: true,
-      logs: {
-        enabled: true,
-        invocationLogs: true,
+  Effect.gen(function* () {
+    const env = globalThis.__ALCHEMY_RUNTIME__
+      ? {}
+      : {
+          ApiHyperdrive: yield* ApiHyperdrive,
+        };
+
+    return {
+      main: import.meta.filename,
+      url: true,
+      compatibility: {
+        flags: ["nodejs_compat"],
       },
-    },
-    env: {
-      ApiHyperdrive: Cloudflare.Hyperdrive.ref("ApiHyperdrive"),
-    },
-  },
+      observability: {
+        enabled: true,
+        logs: {
+          enabled: true,
+          invocationLogs: true,
+        },
+      },
+      env,
+    };
+  }),
   Effect.gen(function* () {
     const workerEnvironment = yield* WorkerEnvironment;
     const apiHyperdriveConnectionString = Effect.sync(
@@ -102,8 +110,7 @@ const ApiWorkerLive = ApiWorker.make(
                   };
                 }),
             ),
-            makeDb: () =>
-              makeApiDb(apiHyperdriveConnectionString),
+            makeDb: () => makeApiDb(apiHyperdriveConnectionString),
             closeDb: closeApiDb,
             createAuth: (db, config) => createAuth(db.authDb, config),
             makeHttpApiFetch: ({ auth, db, corsPolicy }) =>
