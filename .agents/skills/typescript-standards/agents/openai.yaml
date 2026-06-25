@@ -1,4 +1,0 @@
-interface:
-  display_name: "TypeScript Standards"
-  short_description: "Repo TypeScript design and safety rules"
-  default_prompt: "Use $typescript-standards to write or review TypeScript code against this repo's standards."

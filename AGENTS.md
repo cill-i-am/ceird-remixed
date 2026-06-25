@@ -40,9 +40,9 @@ Oracle is installed on this machine as `oracle`, with `oracle-mcp` available for
 
 ## Coding Standards
 
-For TypeScript work, use the repo-local `typescript-standards` skill in `.agents/skills/typescript-standards`.
+For TypeScript work, use the repo-local `coding-standards` skill in `.agents/skills/coding-standards`.
 
-That skill owns the coding standards reference at `.agents/skills/typescript-standards/references/coding-standards.md`. Do not keep or look for a separate TypeScript standards copy in `docs/`.
+That skill owns the coding standards references in `.agents/skills/coding-standards/*`. Do not keep or look for a separate TypeScript standards copy in `docs/`.
 
 Use the standards as repo-wide guidance for:
 
