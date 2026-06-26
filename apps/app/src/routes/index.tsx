@@ -1,5 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { Button } from "@ceird/ui";
 import { apiQueries } from "../api-queries";
 import { HealthBadge } from "../health-badge";
 import { parsePublicConfig, publicConfigQueryOptions } from "../public-config";
@@ -26,7 +27,10 @@ function Home() {
 
   return (
     <main className="grid min-h-screen place-items-center p-[clamp(24px,6vw,72px)]">
-      <section className="w-full max-w-[720px]" aria-labelledby="page-title">
+      <section
+        className="grid w-full max-w-[960px] gap-8"
+        aria-labelledby="page-title"
+      >
         <p className="mb-3 text-[0.78rem] font-bold tracking-normal text-muted-foreground uppercase">
           Cloudflare Workers + Alchemy
         </p>
@@ -42,6 +46,16 @@ function Home() {
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <HealthBadge apiHealth={apiHealth} />
+          <Button render={<Link to="/sign-in" />} nativeButton={false}>
+            Sign in
+          </Button>
+          <Button
+            render={<Link to="/sign-up" />}
+            nativeButton={false}
+            variant="outline"
+          >
+            Create account
+          </Button>
         </div>
       </section>
     </main>

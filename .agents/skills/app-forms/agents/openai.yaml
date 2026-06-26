@@ -1,0 +1,4 @@
+interface:
+  display_name: "App Forms"
+  short_description: "TanStack Form patterns for this app."
+  default_prompt: "Use $app-forms to build or review a clientside form in this TanStack Start app."

@@ -14,7 +14,10 @@ import {
   type ServerConfig,
 } from "./public-config-schema";
 
-export { parsePublicConfig } from "./public-config-schema";
+export {
+  deriveAuthBaseUrl,
+  parsePublicConfig,
+} from "./public-config-schema";
 
 class RuntimeConfig extends Context.Service<
   RuntimeConfig,

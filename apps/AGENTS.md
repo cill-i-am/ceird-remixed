@@ -42,6 +42,16 @@ These instructions apply to `apps/*` and refine the repository root `AGENTS.md`.
 - Apply automatic HTTP retries conservatively at the typed client or transport boundary. Retry transient `GET` requests by default; do not retry mutations unless the command has an explicit idempotency strategy such as an idempotency key, natural unique constraint, deduplication record, state-transition guard, or outbox/inbox.
 - Do not introduce another rich-app framework such as Next, Remix, or SvelteKit unless the user explicitly asks for it or the repo records a deliberate framework change.
 
+### Forms
+
+- Use the repo-local `app-forms` skill for TanStack Start form work.
+- Build forms with TanStack Form, shadcn/Base UI form primitives, and Effect Schema. Do not introduce React Hook Form, Formik, native form actions, or form-data POST flows unless the repo records a deliberate forms decision change.
+- Treat form values as boundary input. Validate client-side with `Schema.toStandardSchemaV1(...)`, then decode again with Effect Schema inside `onSubmit` before calling a clientside mutation. This preserves branded/domain values because TanStack Form validates Standard Schema input but submits the input shape.
+- Keep form state in TanStack Form and mutation/server state in TanStack Query or the relevant client library. Do not mirror normal form values, derived validity, submit pending state, or mutation errors in `useState`; use `form.Field`, `form.Subscribe`, `useStore`, and mutation state instead.
+- Prefer route-local form submit logic until reuse is proven. Put shared form schemas, parsers, and tiny boundary adapters in a feature slice such as `src/features/<feature>/shared/*`; do not create broad reusable form components just because two routes look similar.
+- Use TanStack Form listeners for field reactions such as resetting dependent fields or debounced autosave. Avoid `useEffect` for normal form derivation or field-change reactions.
+- Compose visual structure with `FieldGroup`, `Field`, `FieldLabel`, `FieldError`, and the shared shadcn controls from `@ceird/ui`. Put `data-invalid` on `Field` and `aria-invalid` on the input/control.
+
 ### API Transport Boundaries
 
 Browser API calls use the public API URL. TanStack Start SSR calls should use the app Worker's server-only service binding to the API Worker. Both transports must be hidden behind the typed API client so routes and components never choose transport directly.
