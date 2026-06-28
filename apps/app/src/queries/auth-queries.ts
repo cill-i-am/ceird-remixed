@@ -1,3 +1,4 @@
+import type { QueryClient } from "@tanstack/react-query";
 import type { MeResponse } from "@ceird/api-contract";
 import * as Effect from "effect/Effect";
 import { createEffectQuery } from "effect-query";
@@ -109,3 +110,14 @@ export const authQueries = {
     });
   },
 } as const;
+
+/** Refresh the browser-visible app session after Better Auth mutations. */
+export async function refreshAuthSession(
+  queryClient: QueryClient,
+  apiBaseUrl: ApiBaseUrl,
+) {
+  const queryKey = authQueryKeys.session(apiBaseUrl);
+
+  await queryClient.invalidateQueries({ exact: true, queryKey });
+  return queryClient.fetchQuery(authQueries.session({ apiBaseUrl }));
+}

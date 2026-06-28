@@ -1,6 +1,11 @@
 import { useForm } from "@tanstack/react-form";
-import { useMutation } from "@tanstack/react-query";
-import { Link, createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Link,
+  createFileRoute,
+  getRouteApi,
+  useNavigate,
+} from "@tanstack/react-router";
 import {
   Alert,
   AlertDescription,
@@ -15,13 +20,17 @@ import {
 } from "@ceird/ui";
 import { getAuthClient } from "../../auth-client";
 import { betterAuthErrorMessage } from "../../features/auth/shared/better-auth-error";
+import {
+  handleAuthMutationSuccess,
+  type AuthMutationSuccessOptions,
+} from "../../features/auth/shared/auth-success";
 import { toFieldErrors } from "../../features/auth/shared/form-errors";
 import {
   parseSignUpForm,
   signUpFormValidator,
   type SignUpFormValues,
 } from "../../features/auth/shared/form-schemas";
-import { parseAuthBaseUrl } from "../../public-config-schema";
+import { parseApiBaseUrl, parseAuthBaseUrl } from "../../public-config-schema";
 
 export const Route = createFileRoute("/_auth/sign-up")({
   component: SignUpPage,
@@ -29,9 +38,21 @@ export const Route = createFileRoute("/_auth/sign-up")({
 
 const authRoute = getRouteApi("/_auth");
 
+export function createSignUpSuccessHandler(
+  options: Omit<AuthMutationSuccessOptions, "to">,
+) {
+  return () => handleAuthMutationSuccess({ ...options, to: "/dashboard" });
+}
+
 function SignUpPage() {
-  const { authBaseUrl: encodedAuthBaseUrl } = authRoute.useRouteContext();
+  const {
+    apiBaseUrl: encodedApiBaseUrl,
+    authBaseUrl: encodedAuthBaseUrl,
+  } = authRoute.useRouteContext();
+  const apiBaseUrl = parseApiBaseUrl(encodedApiBaseUrl);
   const authBaseUrl = parseAuthBaseUrl(encodedAuthBaseUrl);
+  const queryClient = useQueryClient();
+  const navigate = useNavigate({ from: Route.fullPath });
   const signUpMutation = useMutation({
     mutationFn: async (values: SignUpFormValues) => {
       const response = await getAuthClient(authBaseUrl).signUp.email({
@@ -48,6 +69,11 @@ function SignUpPage() {
 
       return response.data;
     },
+    onSuccess: createSignUpSuccessHandler({
+      apiBaseUrl,
+      navigate,
+      queryClient,
+    }),
   });
 
   const form = useForm({
@@ -225,12 +251,6 @@ function SignUpPage() {
             <AlertDescription>{signUpMutation.error.message}</AlertDescription>
           </Alert>
         )}
-
-        {signUpMutation.isSuccess ? (
-          <Alert>
-            <AlertTitle>Account created.</AlertTitle>
-          </Alert>
-        ) : null}
 
         <Field>
           <form.Subscribe

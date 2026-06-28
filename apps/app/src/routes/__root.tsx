@@ -5,6 +5,7 @@ import {
   Scripts,
   createRootRouteWithContext,
 } from "@tanstack/react-router";
+import { Toaster } from "@ceird/ui";
 import stylesheet from "@ceird/ui/globals.css?url";
 import type { ReactNode } from "react";
 
@@ -45,6 +46,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       </head>
       <body className="m-0 min-h-screen min-w-[320px] bg-background font-sans leading-normal text-foreground antialiased">
         {children}
+        <Toaster />
         <Scripts />
       </body>
     </html>

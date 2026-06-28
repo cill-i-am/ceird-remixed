@@ -47,6 +47,24 @@ describe("app Better Auth client", () => {
       },
     ]);
   });
+
+  test("signs out through the runtime Better Auth URL", async () => {
+    const { calls, fetch } = makeFetch();
+    vi.stubGlobal("fetch", fetch);
+    const authBaseUrl = deriveAuthBaseUrl(
+      parseApiBaseUrl("https://api.sign-out.test"),
+    );
+
+    await getAuthClient(authBaseUrl).signOut();
+
+    expect(calls).toEqual([
+      {
+        credentials: "include",
+        method: "POST",
+        url: "https://api.sign-out.test/api/auth/sign-out",
+      },
+    ]);
+  });
 });
 
 function makeFetch() {

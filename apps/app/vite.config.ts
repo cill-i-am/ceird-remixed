@@ -16,7 +16,13 @@ export default defineConfig({
       "@base-ui/react/merge-props",
       "@base-ui/react/use-render",
     ],
-    include: ["better-auth/react"],
+    include: [
+      "@tanstack/react-form",
+      "@tanstack/react-router",
+      "better-auth/react",
+      "use-sync-external-store/shim",
+      "use-sync-external-store/shim/with-selector",
+    ],
   },
   resolve: {
     dedupe: ["react", "react-dom"],

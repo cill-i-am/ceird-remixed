@@ -13,6 +13,7 @@ export const Route = createFileRoute("/_auth")({
     const { apiBaseUrl } = parsePublicConfig(publicConfig);
 
     return {
+      apiBaseUrl: apiBaseUrl.href,
       authBaseUrl: deriveAuthBaseUrl(apiBaseUrl).href,
     };
   },

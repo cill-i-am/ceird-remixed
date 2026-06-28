@@ -14,9 +14,13 @@ export default defineConfig({
       "@base-ui/react/use-render",
     ],
     include: [
+      "@tanstack/react-form",
+      "@tanstack/react-router",
       "@tanstack/start-fn-stubs",
       "better-auth/react",
       "effect/unstable/http/HttpClientResponse",
+      "use-sync-external-store/shim",
+      "use-sync-external-store/shim/with-selector",
     ],
   },
   resolve: {

@@ -1,6 +1,11 @@
 import { useForm } from "@tanstack/react-form";
-import { useMutation } from "@tanstack/react-query";
-import { Link, createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Link,
+  createFileRoute,
+  getRouteApi,
+  useNavigate,
+} from "@tanstack/react-router";
 import {
   Alert,
   AlertDescription,
@@ -15,13 +20,17 @@ import {
 } from "@ceird/ui";
 import { getAuthClient } from "../../auth-client";
 import { betterAuthErrorMessage } from "../../features/auth/shared/better-auth-error";
+import {
+  handleAuthMutationSuccess,
+  type AuthMutationSuccessOptions,
+} from "../../features/auth/shared/auth-success";
 import { toFieldErrors } from "../../features/auth/shared/form-errors";
 import {
   parseSignInForm,
   signInFormValidator,
   type SignInFormValues,
 } from "../../features/auth/shared/form-schemas";
-import { parseAuthBaseUrl } from "../../public-config-schema";
+import { parseApiBaseUrl, parseAuthBaseUrl } from "../../public-config-schema";
 
 export const Route = createFileRoute("/_auth/sign-in")({
   component: SignInPage,
@@ -29,9 +38,21 @@ export const Route = createFileRoute("/_auth/sign-in")({
 
 const authRoute = getRouteApi("/_auth");
 
+export function createSignInSuccessHandler(
+  options: Omit<AuthMutationSuccessOptions, "to">,
+) {
+  return () => handleAuthMutationSuccess({ ...options, to: "/dashboard" });
+}
+
 function SignInPage() {
-  const { authBaseUrl: encodedAuthBaseUrl } = authRoute.useRouteContext();
+  const {
+    apiBaseUrl: encodedApiBaseUrl,
+    authBaseUrl: encodedAuthBaseUrl,
+  } = authRoute.useRouteContext();
+  const apiBaseUrl = parseApiBaseUrl(encodedApiBaseUrl);
   const authBaseUrl = parseAuthBaseUrl(encodedAuthBaseUrl);
+  const queryClient = useQueryClient();
+  const navigate = useNavigate({ from: Route.fullPath });
   const signInMutation = useMutation({
     mutationFn: async (values: SignInFormValues) => {
       const response = await getAuthClient(authBaseUrl).signIn.email({
@@ -47,6 +68,11 @@ function SignInPage() {
 
       return response.data;
     },
+    onSuccess: createSignInSuccessHandler({
+      apiBaseUrl,
+      navigate,
+      queryClient,
+    }),
   });
 
   const form = useForm({
@@ -160,12 +186,6 @@ function SignInPage() {
             <AlertDescription>{signInMutation.error.message}</AlertDescription>
           </Alert>
         )}
-
-        {signInMutation.isSuccess ? (
-          <Alert>
-            <AlertTitle>Signed in.</AlertTitle>
-          </Alert>
-        ) : null}
 
         <Field>
           <form.Subscribe
