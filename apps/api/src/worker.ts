@@ -12,8 +12,10 @@ import * as Redacted from "effect/Redacted";
 import * as HttpEffect from "effect/unstable/http/HttpEffect";
 import {
   BetterAuthSecretSchema,
+  isLocalAuthStage,
   makeStageAuthConfig,
   parseHostList,
+  parseLocalAuthCookieDomain,
   parseOriginList,
 } from "./auth-config.ts";
 import { createAuth } from "./auth.ts";
@@ -61,7 +63,7 @@ const ApiWorkerLive = ApiWorker.make(
     const stack = yield* Alchemy.Stack;
     const stage = stack.stage;
     const stageAuthConfig = makeStageAuthConfig(stage);
-    const allowLocalConfig = isLocalStage(stage);
+    const allowLocalConfig = isLocalAuthStage(stage);
     const authSecretConfig = Config.schema(
       BetterAuthSecretSchema,
       "BETTER_AUTH_SECRET",
@@ -72,20 +74,39 @@ const ApiWorkerLive = ApiWorker.make(
     const configuredAllowedHosts = yield* Config.string(
       "CEIRD_AUTH_ALLOWED_HOSTS",
     ).pipe(Config.option);
+    const configuredAuthCookieDomain = yield* Config.string(
+      "CEIRD_AUTH_COOKIE_DOMAIN",
+    ).pipe(Config.option);
+    const localTrustedOrigins = parseOriginList(
+      Option.getOrUndefined(configuredTrustedOrigins),
+      {
+        allowLocalHttp: allowLocalConfig,
+      },
+    );
+    const localAllowedHosts = parseHostList(
+      Option.getOrUndefined(configuredAllowedHosts),
+      {
+        allowLocalHosts: allowLocalConfig,
+      },
+    );
     const trustedOrigins = unique([
       stageAuthConfig.appOrigin,
-      ...parseOriginList(Option.getOrUndefined(configuredTrustedOrigins), {
-        allowLocalHttp: allowLocalConfig,
-      }),
+      ...localTrustedOrigins,
     ]);
     const allowedHosts = unique(
-      [
-        stageAuthConfig.apiHost,
-        ...parseHostList(Option.getOrUndefined(configuredAllowedHosts), {
-          allowLocalHosts: allowLocalConfig,
-        }),
-      ].map((host) => host.toLowerCase()),
+      [stageAuthConfig.apiHost, ...localAllowedHosts].map((host) =>
+        host.toLowerCase()
+      ),
     );
+    const crossSubDomainCookieDomain = allowLocalConfig
+      ? parseLocalAuthCookieDomain(
+        Option.getOrUndefined(configuredAuthCookieDomain),
+        {
+          apiHosts: localAllowedHosts,
+          appOrigins: localTrustedOrigins,
+        },
+      )
+      : stageAuthConfig.sharedCookieDomain;
     const corsPolicy = makeCorsPolicy({
       credentialedOrigins: trustedOrigins,
     });
@@ -107,6 +128,9 @@ const ApiWorkerLive = ApiWorker.make(
                     allowedHosts,
                     protocol: "https" as const,
                     useSecureCookies: true,
+                    ...(crossSubDomainCookieDomain === undefined
+                      ? {}
+                      : { crossSubDomainCookieDomain }),
                   };
                 }),
             ),
@@ -137,10 +161,6 @@ export default ApiWorker.pipe(Effect.provide(ApiWorkerLive));
 
 function unique(values: ReadonlyArray<string>): ReadonlyArray<string> {
   return [...new Set(values)];
-}
-
-function isLocalStage(stage: string) {
-  return stage === "dev" || stage === "test" || stage.startsWith("dev_");
 }
 
 type RuntimeHyperdriveBinding = {

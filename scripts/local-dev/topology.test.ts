@@ -22,6 +22,10 @@ test("builds stable service origins from branch-like stage input", () => {
     "https://api.codex-portless-local-dev.ceird.localhost/",
   );
   assert.equal(
+    topology.authCookieDomain,
+    "codex-portless-local-dev.ceird.localhost",
+  );
+  assert.equal(
     topology.authAllowedHosts,
     "api.codex-portless-local-dev.ceird.localhost",
   );
@@ -56,13 +60,14 @@ test("includes the proxy port when portless is not running on 443", () => {
     topology.authAllowedHosts,
     "api.dev-cillian.ceird.localhost:1355",
   );
+  assert.equal(topology.authCookieDomain, "dev-cillian.ceird.localhost");
 });
 
 test("local dev env populates the Worker auth config names", () => {
   const topology = makeLocalDevTopology("dev_cillian", { proxyPort: 1355 });
   const env = makeLocalDevEnv(topology, {});
 
-  assert.equal(env.CEIRD_AUTH_COOKIE_DOMAIN, undefined);
+  assert.equal(env.CEIRD_AUTH_COOKIE_DOMAIN, "dev-cillian.ceird.localhost");
   assert.equal(
     env.CEIRD_AUTH_TRUSTED_ORIGINS,
     "https://app.dev-cillian.ceird.localhost:1355",

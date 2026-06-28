@@ -7,9 +7,9 @@ function getIncomingRequestHeaders() {
   return getRequest().headers;
 }
 
-// Better Auth cookies are host-only on the API origin in this slice, so SSR
-// cannot authenticate by forwarding app-host cookies. Browser API calls use
-// credentials: "include"; SSR calls may forward bearer auth in future flows.
+// Better Auth uses shared ceird.app cookies in deployed stages. SSR forwards
+// only the session cookie through the API service binding; browser calls still
+// use credentials: "include".
 export const runtimeApiFetchServer: typeof fetch =
   makeRuntimeApiFetchServerFromRuntime({
     getApiWorker: () => env.API_WORKER,

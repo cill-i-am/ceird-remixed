@@ -56,7 +56,7 @@ describe("makeApiWorkerFetch", () => {
     expect(request.headers.get("x-b3-traceid")).toBe("incoming-trace-id");
   });
 
-  test("does not broadly forward request cookies to the API worker", () => {
+  test("does not list cookies as broadly forwarded headers", () => {
     expect(forwardedApiHeaderNames).not.toContain("cookie");
   });
 });
@@ -80,15 +80,57 @@ describe("withForwardedApiHeaders", () => {
     expect(headers.get("traceparent")).toBe("api-traceparent");
   });
 
-  test("does not forward Better Auth cookies from app-host SSR requests", () => {
+  test("forwards only Better Auth session cookies from app-host SSR requests", () => {
     const headers = withForwardedApiHeaders(
       new Headers(),
       new Headers({
-        cookie: "better-auth.session_token=app-host-cookie; theme=dark",
+        cookie:
+          "theme=dark; better-auth.session_token=app-host-cookie; other=value",
+      }),
+    );
+
+    expect(headers.get("cookie")).toBe(
+      "better-auth.session_token=app-host-cookie",
+    );
+  });
+
+  test("recognizes prefixed Better Auth session cookies", () => {
+    const headers = withForwardedApiHeaders(
+      new Headers(),
+      new Headers({
+        cookie: "__Secure-better-auth.session_token=secure-cookie; theme=dark",
+      }),
+    );
+
+    expect(headers.get("cookie")).toBe(
+      "__Secure-better-auth.session_token=secure-cookie",
+    );
+  });
+
+  test("does not forward unrelated cookies with Better Auth-like suffixes", () => {
+    const headers = withForwardedApiHeaders(
+      new Headers(),
+      new Headers({
+        cookie: "tracking-better-auth.session_token=tracking-cookie",
       }),
     );
 
     expect(headers.has("cookie")).toBe(false);
+  });
+
+  test("does not replace explicit API request cookies", () => {
+    const headers = withForwardedApiHeaders(
+      new Headers({
+        cookie: "better-auth.session_token=api-request-cookie",
+      }),
+      new Headers({
+        cookie: "better-auth.session_token=app-host-cookie",
+      }),
+    );
+
+    expect(headers.get("cookie")).toBe(
+      "better-auth.session_token=api-request-cookie",
+    );
   });
 });
 

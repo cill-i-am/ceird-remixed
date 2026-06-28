@@ -3,7 +3,7 @@ import { test } from "node:test";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { Auth, AuthSessionLookupFailed, makeAuthLive } from "./auth.ts";
-import { makeStageAuthConfig } from "./auth-config.ts";
+import { makeStageAuthConfig, parseAuthCookieDomain } from "./auth-config.ts";
 import { isAllowedCredentialedOrigin, makeCorsPolicy } from "./cors.ts";
 import { makeAuthFlowHarness } from "./test/auth-flow-harness.ts";
 
@@ -98,12 +98,91 @@ test("secure cookie mode is explicit for deployed auth", async () => {
   assert.match(signInCookie, /;\s*Secure/i);
 });
 
+test("deployed auth shares session cookies across Ceird subdomains", async () => {
+  const preview = makeStageAuthConfig("pr-12");
+  await using harness = await makeAuthFlowHarness({
+    authConfig: {
+      allowedHosts: [preview.apiHost],
+      crossSubDomainCookieDomain: preview.sharedCookieDomain,
+      protocol: "https",
+      trustedOrigins: [preview.appOrigin],
+      useSecureCookies: true,
+    },
+    corsPolicy: makeCorsPolicy({
+      credentialedOrigins: [preview.appOrigin],
+    }),
+  });
+
+  const response = await harness.fetch(
+    jsonRequest(`${preview.apiOrigin}/api/auth/sign-up/email`, {
+      email: "shared-cookie@example.com",
+      password: "correct horse battery staple",
+      name: "Shared Cookie",
+    }, {
+      origin: preview.appOrigin,
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(readSetCookie(response), /;\s*Domain=ceird\.app/i);
+  assert.match(readSetCookie(response), /;\s*Secure/i);
+});
+
+test("local portless auth shares session cookies only within the local stage parent", async () => {
+  const apiHost = "api.dev-cillian.ceird.localhost:1355";
+  const apiOrigin = `https://${apiHost}`;
+  const appOrigin = "https://app.dev-cillian.ceird.localhost:1355";
+  const cookieDomain = parseAuthCookieDomain("dev-cillian.ceird.localhost", {
+    apiHost,
+    appOrigin,
+  });
+  await using harness = await makeAuthFlowHarness({
+    authConfig: {
+      allowedHosts: [apiHost],
+      crossSubDomainCookieDomain: cookieDomain,
+      protocol: "https",
+      trustedOrigins: [appOrigin],
+      useSecureCookies: true,
+    },
+    corsPolicy: makeCorsPolicy({
+      credentialedOrigins: [appOrigin],
+    }),
+  });
+
+  const response = await harness.fetch(
+    jsonRequest(`${apiOrigin}/api/auth/sign-up/email`, {
+      email: "local-shared-cookie@example.com",
+      password: "correct horse battery staple",
+      name: "Local Shared Cookie",
+    }, {
+      origin: appOrigin,
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(
+    readSetCookie(response),
+    /;\s*Domain=dev-cillian\.ceird\.localhost/i,
+  );
+  assert.match(readSetCookie(response), /;\s*Secure/i);
+});
+
 test("GET /me requires a valid Better Auth session and returns a typed principal", async () => {
   await using harness = await makeAuthFlowHarness();
 
   const anonymous = await harness.fetch(new Request("http://localhost/me"));
   assert.equal(anonymous.status, 401);
   assert.equal(await anonymous.text(), "");
+
+  const unrelatedCookie = await harness.fetch(
+    new Request("http://localhost/me", {
+      headers: {
+        cookie: "tracking-better-auth.session_token=not-a-session",
+      },
+    }),
+  );
+  assert.equal(unrelatedCookie.status, 401);
+  assert.equal(await unrelatedCookie.text(), "");
 
   const cookie = await harness.signUpAndReadCookie({
     email: "grace@example.com",

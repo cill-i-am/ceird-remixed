@@ -18,10 +18,15 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+import type { AuthCookieDomain } from "./auth-config.ts";
 
 const smokeTestUserEmailPrefix = "smoke+";
 const smokeTestUserEmailDomain = "@example.com";
 const smokeTestUserName = "Smoke Test";
+const betterAuthSessionCookieNames = new Set([
+  "better-auth.session_token",
+  "__Secure-better-auth.session_token",
+]);
 
 export class Principal extends Schema.Class<Principal>("Principal")({
   id: UserIdSchema,
@@ -70,6 +75,7 @@ export type AuthError =
 export type AuthConfig = {
   readonly secret: Redacted.Redacted<string>;
   readonly allowedHosts: ReadonlyArray<string>;
+  readonly crossSubDomainCookieDomain?: AuthCookieDomain;
   readonly trustedOrigins: ReadonlyArray<string>;
   readonly protocol: "http" | "https";
   readonly useSecureCookies: boolean;
@@ -161,6 +167,14 @@ export function createAuth(
     advanced: {
       trustedProxyHeaders: false,
       useSecureCookies: config.useSecureCookies,
+      ...(config.crossSubDomainCookieDomain === undefined
+        ? {}
+        : {
+            crossSubDomainCookies: {
+              enabled: true,
+              domain: config.crossSubDomainCookieDomain,
+            },
+          }),
       ipAddress: {
         ipAddressHeaders: ["cf-connecting-ip"],
       },
@@ -258,7 +272,6 @@ function hasBetterAuthSessionCookie(headers: Headers) {
   return cookieHeader
     .split(";")
     .some((cookie) =>
-      cookie.trim().split("=", 1)[0]?.endsWith("better-auth.session_token") ??
-      false,
+      betterAuthSessionCookieNames.has(cookie.trim().split("=", 1)[0] ?? ""),
     );
 }

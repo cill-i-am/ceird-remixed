@@ -13,6 +13,11 @@ export const forwardedApiHeaderNames = [
   "x-b3-traceid",
 ] as const;
 
+const betterAuthSessionCookieNames = new Set([
+  "better-auth.session_token",
+  "__Secure-better-auth.session_token",
+]);
+
 export function withForwardedApiHeaders(
   outgoingHeaders: Headers,
   incomingHeaders?: IncomingApiHeaders,
@@ -34,6 +39,14 @@ export function withForwardedApiHeaders(
     }
   }
 
+  if (!headers.has("cookie")) {
+    const sessionCookie = getBetterAuthSessionCookie(incomingHeaders);
+
+    if (sessionCookie !== undefined) {
+      headers.set("cookie", sessionCookie);
+    }
+  }
+
   return headers;
 }
 
@@ -50,4 +63,32 @@ export function makeApiWorkerFetch(
 
     return apiWorker.fetch(new Request(request, { headers }));
   };
+}
+
+function getBetterAuthSessionCookie(
+  incomingHeaders: IncomingApiHeaders,
+): string | undefined {
+  const cookieHeader = incomingHeaders.get("cookie");
+
+  if (cookieHeader === null) {
+    return undefined;
+  }
+
+  const sessionCookies = cookieHeader
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .filter(isBetterAuthSessionCookie);
+
+  return sessionCookies.length === 0 ? undefined : sessionCookies.join("; ");
+}
+
+function isBetterAuthSessionCookie(cookie: string) {
+  const separatorIndex = cookie.indexOf("=");
+
+  if (separatorIndex <= 0) {
+    return false;
+  }
+
+  const cookieName = cookie.slice(0, separatorIndex);
+  return betterAuthSessionCookieNames.has(cookieName);
 }

@@ -10,6 +10,9 @@ const hostSegmentPattern = new RegExp("^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$");
 const serviceAliasPattern = new RegExp(
   "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$",
 );
+const localAuthCookieDomainPattern = new RegExp(
+  `^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.${localHostBaseName}\\.${localTld}$`,
+);
 const localServiceOriginExpected = `https://*.${localHostBaseName}.${localTld}/`;
 
 function isLocalServiceOrigin(url: URL) {
@@ -47,6 +50,14 @@ export const LocalServiceAliasSchema = Schema.String.check(
     identifier: "LocalServiceAlias",
   }),
 ).pipe(Schema.brand("LocalServiceAlias"));
+
+/** Stage-scoped local auth cookie domain shared by sibling portless hosts. */
+export const LocalAuthCookieDomainSchema = Schema.String.check(
+  Schema.isPattern(localAuthCookieDomainPattern, {
+    expected: `stage.${localHostBaseName}.${localTld}`,
+    identifier: "LocalAuthCookieDomain",
+  }),
+).pipe(Schema.brand("LocalAuthCookieDomain"));
 
 /** Public local service origin routed by portless. */
 export const LocalServiceOriginSchema = Schema.URLFromString.check(
@@ -89,6 +100,11 @@ export type LocalServiceAlias = Schema.Schema.Type<
   typeof LocalServiceAliasSchema
 >;
 
+/** Stage-scoped local auth cookie domain. */
+export type LocalAuthCookieDomain = Schema.Schema.Type<
+  typeof LocalAuthCookieDomainSchema
+>;
+
 /** Parsed local service origin URL. */
 export type LocalServiceOrigin = Schema.Schema.Type<
   typeof LocalServiceOriginSchema
@@ -118,6 +134,7 @@ export type LocalDevTopology = {
   readonly stage: LocalAlchemyStage;
   readonly stageHostSegment: LocalHostSegment;
   readonly proxyPort: LocalTargetPort | undefined;
+  readonly authCookieDomain: LocalAuthCookieDomain;
   readonly authAllowedHosts: string;
   readonly authTrustedOrigins: string;
   readonly app: LocalHttpService;
@@ -144,6 +161,10 @@ export const parseLocalHostSegment = Schema.decodeUnknownSync(
 );
 export const parseLocalServiceAlias = Schema.decodeUnknownSync(
   LocalServiceAliasSchema,
+);
+/** Parse a stage-scoped local auth cookie domain. */
+export const parseLocalAuthCookieDomain = Schema.decodeUnknownSync(
+  LocalAuthCookieDomainSchema,
 );
 export const parseLocalServiceOrigin = Schema.decodeUnknownSync(
   LocalServiceOriginSchema,
@@ -247,6 +268,15 @@ export function makeLocalServiceAlias(
   );
 }
 
+/** Create the local cookie domain shared by the app/api sibling hosts. */
+export function makeLocalAuthCookieDomain(
+  stageHostSegment: LocalHostSegment,
+): LocalAuthCookieDomain {
+  return parseLocalAuthCookieDomain(
+    `${stageHostSegment}.${localHostBaseName}.${localTld}`,
+  );
+}
+
 /** Create the stable portless origin for one local HTTP service. */
 export function makeLocalServiceOrigin(
   alias: LocalServiceAlias,
@@ -269,6 +299,7 @@ export function makeLocalDevTopology(
 ): LocalDevTopology {
   const stage = normalizeLocalAlchemyStage(stageInput);
   const stageHostSegment = normalizeLocalHostSegment(stage);
+  const authCookieDomain = makeLocalAuthCookieDomain(stageHostSegment);
   const appAlias = makeLocalServiceAlias("app", stageHostSegment);
   const apiAlias = makeLocalServiceAlias("api", stageHostSegment);
   const proxyPort =
@@ -284,6 +315,7 @@ export function makeLocalDevTopology(
     stage,
     stageHostSegment,
     proxyPort,
+    authCookieDomain,
     authAllowedHosts: apiOrigin.host,
     authTrustedOrigins: appOrigin.origin,
     app: {
@@ -318,6 +350,7 @@ export function makeLocalDevEnv(
     CEIRD_LOCAL_API_ORIGIN: topology.api.origin.href,
     CEIRD_LOCAL_AUTH_BASE_URL: `${topology.api.origin.origin}/api/auth`,
     CEIRD_AUTH_ALLOWED_HOSTS: topology.authAllowedHosts,
+    CEIRD_AUTH_COOKIE_DOMAIN: topology.authCookieDomain,
     CEIRD_AUTH_TRUSTED_ORIGINS: topology.authTrustedOrigins,
     NODE_EXTRA_CA_CERTS:
       baseEnv.NODE_EXTRA_CA_CERTS ??

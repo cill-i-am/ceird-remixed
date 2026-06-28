@@ -29,7 +29,7 @@ describe("server runtime bindings", () => {
     });
   });
 
-  test("uses the API_WORKER service binding without forwarding disallowed incoming headers", async () => {
+  test("uses the API_WORKER service binding with narrowly forwarded incoming headers", async () => {
     const apiFetch = makeRuntimeApiFetchServerFromRuntime({
       getApiWorker: () => env.API_WORKER,
       getIncomingHeaders: () =>
@@ -54,7 +54,9 @@ describe("server runtime bindings", () => {
     expect(echo.headers.accept).toBe("application/json");
     expect(echo.headers.authorization).toBe("Bearer user-token");
     expect(echo.headers.traceparent).toBe("incoming-traceparent");
-    expect(echo.headers.cookie).toBeUndefined();
+    expect(echo.headers.cookie).toBe(
+      "better-auth.session_token=app-host-cookie",
+    );
     expect(echo.headers["x-app-internal"]).toBeUndefined();
     expect(echo.headers["x-forwarded-for"]).toBeUndefined();
   });
