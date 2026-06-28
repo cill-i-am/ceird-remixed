@@ -12,7 +12,8 @@
     "src/**/*.tsx",
     "src/**/*.d.ts",
     "vite.config.ts",
-    "vitest.browser.config.ts"
+    "vitest.browser.config.ts",
+    "vitest.workers.config.ts"
   ],
   "exclude": ["node_modules", ".output", "dist"]
 }

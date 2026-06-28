@@ -26,7 +26,7 @@
     "effect": "4.0.0-beta.85"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260619.1",
+    "@cloudflare/workers-types": "^4.20260625.1",
     "@effect/platform-node": "4.0.0-beta.85",
     "@types/node": "^26.0.0",
     "alchemy": "2.0.0-beta.58",
