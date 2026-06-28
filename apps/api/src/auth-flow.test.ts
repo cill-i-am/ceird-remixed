@@ -103,6 +103,7 @@ test("GET /me requires a valid Better Auth session and returns a typed principal
 
   const anonymous = await harness.fetch(new Request("http://localhost/me"));
   assert.equal(anonymous.status, 401);
+  assert.equal(await anonymous.text(), "");
 
   const cookie = await harness.signUpAndReadCookie({
     email: "grace@example.com",
@@ -131,6 +132,7 @@ test("GET /db/health requires a valid Better Auth session", async () => {
     new Request("http://localhost/db/health"),
   );
   assert.equal(anonymous.status, 401);
+  assert.equal(await anonymous.text(), "");
 
   const cookie = await harness.signUpAndReadCookie({
     email: "db-health@example.com",

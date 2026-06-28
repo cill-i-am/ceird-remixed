@@ -15,8 +15,126 @@ const healthyResponseBody = {
   service: "ceird-api",
   status: "healthy",
 };
+const meResponseBody = {
+  id: "user_123",
+  email: "ada@example.com",
+  emailVerified: true,
+  name: "Ada Lovelace",
+};
 const testApiBaseUrl = parseApiBaseUrl("https://api.test");
 const testApiHealthUrl = new URL("/health", testApiBaseUrl).href;
+const testApiMeUrl = new URL("/me", testApiBaseUrl).href;
+
+describe("apiQueries.auth.session", () => {
+  test("uses the API auth session query key", () => {
+    expect(
+      apiQueries.auth.session({
+        apiBaseUrl: testApiBaseUrl,
+      }).queryKey,
+    ).toEqual(["api", "auth", "session", testApiBaseUrl.href]);
+  });
+
+  test("returns an authenticated session from the API principal", async () => {
+    const { calls, fetch } = makeFetch(() => jsonResponse(meResponseBody));
+    const queryClient = makeQueryClient();
+    const queryOptions = apiQueries.auth.session({
+      apiBaseUrl: testApiBaseUrl,
+      fetch,
+    });
+
+    const session = await queryClient.ensureQueryData(queryOptions);
+
+    expect(session).toEqual({
+      _tag: "Authenticated",
+      user: meResponseBody,
+    });
+    expect(calls.map((call) => call.method)).toEqual(["GET"]);
+    expect(calls.map((call) => call.url)).toEqual([testApiMeUrl]);
+  });
+
+  test("returns an anonymous session when the API rejects the session", async () => {
+    const { calls, fetch } = makeFetch(() =>
+      new Response(undefined, { status: 401 }),
+    );
+    const queryClient = makeQueryClient();
+    const queryOptions = apiQueries.auth.session({
+      apiBaseUrl: testApiBaseUrl,
+      fetch,
+    });
+
+    const session = await queryClient.ensureQueryData(queryOptions);
+
+    expect(session).toEqual({
+      _tag: "Anonymous",
+    });
+    expect(calls.map((call) => call.method)).toEqual(["GET"]);
+    expect(calls.map((call) => call.url)).toEqual([testApiMeUrl]);
+  });
+
+  test("does not retry the session query after the API client retry budget fails", () => {
+    expect(
+      apiQueries.auth.session({
+        apiBaseUrl: testApiBaseUrl,
+      }).retry,
+    ).toBe(false);
+  });
+
+  test("rejects when the API session request cannot recover", async () => {
+    const { calls, fetch } = makeFetch(() =>
+      new Response(undefined, { status: 500 }),
+    );
+    const queryClient = makeQueryClient();
+    const queryOptions = apiQueries.auth.session({
+      apiBaseUrl: testApiBaseUrl,
+      fetch,
+    });
+
+    await expect(queryClient.ensureQueryData(queryOptions)).rejects.toThrow();
+    expect(calls.map((call) => call.method)).toEqual(["GET", "GET", "GET"]);
+    expect(calls.map((call) => call.url)).toEqual([
+      testApiMeUrl,
+      testApiMeUrl,
+      testApiMeUrl,
+    ]);
+  });
+
+  test("rejects when the API session response does not match the contract", async () => {
+    const { calls, fetch } = makeFetch(() =>
+      jsonResponse({
+        ...meResponseBody,
+        emailVerified: "yes",
+      }),
+    );
+    const queryClient = makeQueryClient();
+    const queryOptions = apiQueries.auth.session({
+      apiBaseUrl: testApiBaseUrl,
+      fetch,
+    });
+
+    await expect(queryClient.ensureQueryData(queryOptions)).rejects.toThrow();
+    expect(calls.map((call) => call.method)).toEqual(["GET"]);
+    expect(calls.map((call) => call.url)).toEqual([testApiMeUrl]);
+  });
+
+  test("rejects when the API session transport cannot recover", async () => {
+    const { calls, fetch } = makeFetch(() => {
+      throw new TypeError("Network unavailable");
+    });
+    const queryClient = makeQueryClient();
+    const queryOptions = apiQueries.auth.session({
+      apiBaseUrl: testApiBaseUrl,
+      fetch,
+    });
+
+    await expect(queryClient.ensureQueryData(queryOptions)).rejects.toThrow();
+    expect(calls.map((call) => call.method)).toEqual(["GET", "GET", "GET"]);
+    expect(calls.map((call) => call.url)).toEqual([
+      testApiMeUrl,
+      testApiMeUrl,
+      testApiMeUrl,
+    ]);
+  });
+});
 
 describe("apiQueries.meta.health", () => {
   test("uses the API metadata health query key", () => {
